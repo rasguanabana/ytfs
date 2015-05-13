@@ -7,21 +7,24 @@
 
 import os
 import stat
+import errno
+from enum import Enum
+from copyt import deepcopy
 
 from fuse import FUSE, FuseOSError, Operations
 
 class fd_dict(dict):
 
-    def push(self, path):
+    def push(self, p):
 
         """Rozszerzenie, które znajduje najniższy niewykorzystany deskryptor i wpisuje podeń krotkowy identyfikator
         filmu.
-        
+
         Parameters
         ----------
-        path : array-like
+        p: array-like
             Krotkowy identyfikator pliku, dla którego chcemy przydzielić deskryptor.
-        
+     
         Returns
         -------
         descriptor : int
@@ -31,7 +34,7 @@ class fd_dict(dict):
         k = 0
         while k in self.keys():
             k += 1
-        self[k] = path
+        self[k] = p
 
         return k
 
@@ -83,6 +86,48 @@ class YTFS(Operations):
                                 #
                                 # {
                                 #       1: ('wyszukiwana fraza 1', 'tytul1':
+
+    class PathType(Enum):
+
+        """Czytelna reprezentacja typu podanego identyfikatora krotkowego."""
+
+        invalid = 0
+        main = 1
+        subdir = 2
+        file = 3
+
+        @staticmethod
+        def get(p):
+
+            """Sprawdź typ ścieżki
+
+            Parameters
+            ----------
+            p : str or tuple
+                Ścieżka do pliku lub identyfikator krotkowy
+
+            Returns
+            -------
+            path_type : PathType
+                Typ pliku jako enumerator PathType
+
+            """
+
+            if not isinstance(p, tuple) or len(p) != 2 or not (isinstance(p[0], (str, type(None))) and isinstance(p[1], (str, type(None)))):
+                #podstawowowa walidacja
+                return YTFS.PathType.invalid
+
+            elif p[0] is None and p[1] is None:
+                return YTFS.PathType.main
+
+            elif p[0] and p[1] is None:
+                return YTFS.PathType.subdir
+
+            elif p[0] and p[1]:
+                return YTFS.PathType.file
+
+            else:
+                return YTFS.PathType.invalid
 
     def __pathToTuple(self, path):
 
@@ -140,13 +185,13 @@ class YTFS(Operations):
 
         return (d, f)
 
-    def __exists(self, path):
+    def __exists(self, p):
 
         """Sprawdź czy plik o podanej ścieżce istnieje.
 
         Parameters
         ----------
-        path : str
+        p : str or tuple
             Ścieżka do pliku
 
         Returns
@@ -156,48 +201,167 @@ class YTFS(Operations):
 
         """
 
-        tid = self.__pathToTuple(path)
+        if not isinstance(p, tuple) and isinstance(p, str):
+            tid = self.__pathToTuple(p)
 
         return ((not tid[0] and not tid[1]) or (tid[0] in self.searches and not tid[1]) or (tid[0] in self.searches and
             tid[1] in self.searches[tid[0]]))
 
-    def getattr(self, path, fh=None):
+    def _pathdec(method):
+
+        """Dekorator podmieniający argument path z reprezentacji tekstowej na identyfikator krotkowy."""
+
+        def mod(self, *args):
+
+            args = list(args)
+            try:
+                args[0] = self.__pathToTuple(args[0])
+            except ValueError:
+                raise FuseOSError(errno.EINVAL)
+
+            return method(self, *args)
+
+        return mod
+
+    @_pathdec
+    def getattr(self, tid, fh=None):
 
         """Atrybuty pliku."""
 
-        pass
+        if not self.__exists(tid):
+            raise FuseOSError(errno.ENOENT)
 
-    def readdir(self, path, fh):
+        st = deepcopy(self.st)
+        st['st_atime'] = int(time())
+        st['st_mtime'] = st['st_atime']
+        st['st_ctime'] = st['st_atime']
+
+        if self.PathType.get(tid) is self.PathType.file:
+            
+            st['st_mode'] = stat.S_IFREG | 0o444
+            st['st_nlink'] = 1
+
+            st['st_size'] = self.searches[tid[0]][tid[1]].SIZE #TODO
+
+        return st
+
+    @_pathdec
+    def readdir(self, tid, fh):
 
         """Listowanie katalogu."""
 
-        pass
+        ret = []
+        pt = self.PathType.get(tid)
+        try:
+            if pt is self.PathType.main:
+                ret = list(self.searches)
 
-    def mkdir(self, path, mode):
+            elif pt is self.PathType.subdir:
+                ret = list(self.searches[tid[0]])
+
+            elif pt is self.PathType.file:
+                raise FuseOSError(errno.ENOTDIR)
+
+            else:
+                raise FuseOSError(errno.ENOENT)
+
+        except KeyError:
+            raise FuseOSError(errno.ENOENT)
+
+        return ['.', '..'] + ret
+
+    @_pathdec
+    def mkdir(self, tid, mode):
 
         """Utworzenie katalogu."""
-        pass
 
-    def rmdir(self, path):
+        pt = self.PathType.get(tid)
+
+        if pt is self.PathType.invalid or pt is self.PathType.file:
+            raise FuseOSError(errno.EPERM)
+
+        if self.__exists(tid):
+            raise FuseOSError(errno.EEXIST)
+
+        search_results = YTACTIONS.SEARCH(tid[0]) #TODO
+
+        self.searches[tid[0]] = {sr.TITLE: YTSTOR(sr) for sr in search_results} #TODO
+
+        return 0
+
+    @_pathdec
+    def rmdir(self, tid):
 
         """Usunięcie katalogu."""
 
-        pass
+        pt = self.PathType.get(tid)
 
-    def open(self, path, flags):
+        if pt is self.PathType.main:
+            raise FuseOSError(errno.EINVAL)
+        elif pt is not self.PathType.subdir:
+            raise FuseOSError(errno.ENOTDIR)
+
+        try:
+            del self.searches[tid[0]]
+
+        except KeyError:
+            raise FuseOSError(errno.ENOENT)
+
+        return 0
+
+    @_pathdec
+    def open(self, tid, flags):
 
         """Otwarcie pliku."""
+        #TODO pliki specjalne
 
-        pass
+        pt = self.PathType.get(tid)
 
-    def read(self, path, length, offset, fh):
+        if pt is not self.PathType.file:
+            raise FuseOSError(errno.EINVAL)
+
+        if flags & os.O_WRONLY or flags & os.O_RDWR:
+            raise FuseOSError(errno.EROFS)
+
+        if not self.__exists(tid):
+            raise FuseOSError(errno.ENOENT)
+
+        self.searches[tid[0]][tid[1]].INIT() #TODO odwołanie do obiektu YTstor
+
+    @_pathdec
+    def read(self, tid, length, offset, fh):
 
         """Odczyt z pliku."""
+        #TODO pliki specjalne
 
-        pass
+        pt = self.PathType.get(tid)
 
-    def flush(self, path, fh):
+        if pt is not self.PathType.file:
+            raise FuseOSError(errno.EISDIR)
 
-        'Flush'
+        if fh not in self.fds:
+            raise FuseOSError(errno.EBADF)
 
-        pass
+        if not self.__exists(tid):
+            raise FuseOSError(errno.ENOENT)
+
+        d_tid = self.fds[fh]
+        if tid != d_tid:
+            raise FuseOSError(errno.EINVAL)
+
+        return self.searches[tid[0]][tid[1]].READ(offset, offset + length) #TODO
+
+    @_pathdec
+    def release(self, tid, fh):
+
+        """Zamknięcie pliku (?)"""
+
+        try:
+            if self.fds[fh] == tid:
+                del self.fds[fh]
+            else:
+                raise FuseOSError(errno.EINVAL)
+        except KeyError:
+            raise FuseOSError(errno.EINVAL)
+
+        return 0
