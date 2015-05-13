@@ -1,0 +1,8 @@
+.*
+!/.gitignore
+__pycache__
+fuse.py
+fusepy
+*.bak
+*.swp
+test
