@@ -43,9 +43,11 @@ class YTFS(Operations):
 
     """Główna klasa ytfs :)"""
 
+    __sh_script = b"#!/bin/sh\n" #zawartość pliku sterującego (pusty skrypt)
+
     def __init__(self):
 
-        """Inicjalizacja obiektu""" #TODO: wszystko inne poza szkieletem klasy :v
+        """Inicjalizacja obiektu"""
 
         self.st = {
 
@@ -95,6 +97,7 @@ class YTFS(Operations):
         main = 1
         subdir = 2
         file = 3
+        ctrl = 4
 
         @staticmethod
         def get(p):
@@ -114,7 +117,6 @@ class YTFS(Operations):
             """
 
             if not isinstance(p, tuple) or len(p) != 2 or not (isinstance(p[0], (str, type(None))) and isinstance(p[1], (str, type(None)))):
-                #podstawowowa walidacja
                 return YTFS.PathType.invalid
 
             elif p[0] is None and p[1] is None:
@@ -124,7 +126,11 @@ class YTFS(Operations):
                 return YTFS.PathType.subdir
 
             elif p[0] and p[1]:
-                return YTFS.PathType.file
+                
+                if p[0][0] = ' ':
+                    return YTFS.PathType.ctrl
+                else:
+                    return YTFS.PathType.file
 
             else:
                 return YTFS.PathType.invalid
@@ -205,7 +211,7 @@ class YTFS(Operations):
             tid = self.__pathToTuple(p)
 
         return ((not tid[0] and not tid[1]) or (tid[0] in self.searches and not tid[1]) or (tid[0] in self.searches and
-            tid[1] in self.searches[tid[0]]))
+            tid[1] in self.searches[tid[0]])) #TODO dodać warunek dla YTFS.PathType.ctrl
 
     def _pathdec(method):
 
@@ -231,17 +237,25 @@ class YTFS(Operations):
         if not self.__exists(tid):
             raise FuseOSError(errno.ENOENT)
 
+        pt = self.PathType.get(tid)
+
         st = deepcopy(self.st)
         st['st_atime'] = int(time())
         st['st_mtime'] = st['st_atime']
         st['st_ctime'] = st['st_atime']
 
-        if self.PathType.get(tid) is self.PathType.file:
+        if pt is self.PathType.file:
             
             st['st_mode'] = stat.S_IFREG | 0o444
             st['st_nlink'] = 1
 
             st['st_size'] = self.searches[tid[0]][tid[1]].SIZE #TODO
+
+        elif pt is self.PathType.ctrl:
+
+            st['st_mode'] = stat.S_IFREG | 0o555 #te uprawnienia chyba trzeba ciutkę podreperować
+            st['st_nlink'] = 1
+            st['st_size'] = len(self.__sh_script)
 
         return st
 
@@ -268,7 +282,7 @@ class YTFS(Operations):
         except KeyError:
             raise FuseOSError(errno.ENOENT)
 
-        return ['.', '..'] + ret
+        return ['.', '..'] + ret #TODO ctrl
 
     @_pathdec
     def mkdir(self, tid, mode):
@@ -313,11 +327,10 @@ class YTFS(Operations):
     def open(self, tid, flags):
 
         """Otwarcie pliku."""
-        #TODO pliki specjalne
 
         pt = self.PathType.get(tid)
 
-        if pt is not self.PathType.file:
+        if pt is not self.PathType.file and pt is not self.PathType.ctrl:
             raise FuseOSError(errno.EINVAL)
 
         if flags & os.O_WRONLY or flags & os.O_RDWR:
@@ -332,11 +345,14 @@ class YTFS(Operations):
     def read(self, tid, length, offset, fh):
 
         """Odczyt z pliku."""
-        #TODO pliki specjalne
+
+        d_tid = self.fds[fh]
+        if tid != d_tid:
+            raise FuseOSError(errno.EINVAL)
 
         pt = self.PathType.get(tid)
 
-        if pt is not self.PathType.file:
+        if pt is not self.PathType.file and pt is not self.PathType.ctrl:
             raise FuseOSError(errno.EISDIR)
 
         if fh not in self.fds:
@@ -345,11 +361,13 @@ class YTFS(Operations):
         if not self.__exists(tid):
             raise FuseOSError(errno.ENOENT)
 
-        d_tid = self.fds[fh]
-        if tid != d_tid:
-            raise FuseOSError(errno.EINVAL)
+        if pt is self.PathType.file:
+            return self.searches[tid[0]][tid[1]].READ(offset, offset + length) #TODO
 
-        return self.searches[tid[0]][tid[1]].READ(offset, offset + length) #TODO
+        elif pt is self.PathType.ctrl:
+
+            #TODO: przeładowanie katalogu - umieszczenie w nim kolejnych wyników
+            return self.__sh_script
 
     @_pathdec
     def release(self, tid, fh):
