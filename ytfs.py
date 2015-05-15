@@ -9,21 +9,26 @@ import os
 import stat
 import errno
 from enum import Enum
-from copyt import deepcopy
+from copy import deepcopy
 
 from fuse import FUSE, FuseOSError, Operations
 
+from ytstor import YTStor
+from ytactions import YTActions
+
 class fd_dict(dict):
 
-    def push(self, p):
+    def push(self, yts):
 
-        """Rozszerzenie, które znajduje najniższy niewykorzystany deskryptor i wpisuje podeń krotkowy identyfikator
+        """
+        Rozszerzenie, które znajduje najniższy niewykorzystany deskryptor i wpisuje podeń krotkowy identyfikator
         filmu.
 
         Parameters
         ----------
-        p: array-like
-            Krotkowy identyfikator pliku, dla którego chcemy przydzielić deskryptor.
+        yts: YTStor-obj or None
+            Obiekt YTStor, dla którego chcemy przydzielić deskryptor lub None, jeśli alokujemy deskryptor dla
+            pliku sterującego.
      
         Returns
         -------
@@ -31,10 +36,13 @@ class fd_dict(dict):
             Deskryptor do pliku.
         """
 
+        if not isinstance(yts, (YTStor, type(None)):
+            raise TypeError("Expected YTStor object or None.")
+
         k = 0
         while k in self.keys():
             k += 1
-        self[k] = p
+        self[k] = yts
 
         return k
 
@@ -69,12 +77,12 @@ class YTFS(Operations):
                                 # o poszczególnych wyszukiwaniach i ich wynikach, czyli filmach. Struktura:
                                 #
                                 #   {
-                                #       'wyszukiwana fraza 1':  {
+                                #       'wyszukiwana fraza 1':  YTActions({
                                 #                                'tytul1': <YTStor obj>,
                                 #                                'tytul2': <YTStor obj>,
                                 #                                ...
-                                #                               },
-                                #       'wyszukiwana fraza 2':  { ... },
+                                #                               }),
+                                #       'wyszukiwana fraza 2':  YTActions({ ... }),
                                 #       ...
                                 #   }
                                 #
@@ -102,7 +110,8 @@ class YTFS(Operations):
         @staticmethod
         def get(p):
 
-            """Sprawdź typ ścieżki
+            """
+            Sprawdź typ ścieżki
 
             Parameters
             ----------
@@ -115,6 +124,11 @@ class YTFS(Operations):
                 Typ pliku jako enumerator PathType
 
             """
+
+            try:
+                p = self.__pathToTuple(p) #próba konwersji, jeśli p jest stringiem. inaczej nic się nie stanie
+            except TypeError:
+                pass
 
             if not isinstance(p, tuple) or len(p) != 2 or not (isinstance(p[0], (str, type(None))) and isinstance(p[1], (str, type(None)))):
                 return YTFS.PathType.invalid
@@ -137,7 +151,8 @@ class YTFS(Operations):
 
     def __pathToTuple(self, path):
 
-        """Konwersja ścieżki do katalogu lub pliku na jego identyfikator krotkowy.
+        """
+        Konwersja ścieżki do katalogu lub pliku na jego identyfikator krotkowy.
 
         Parameters
         ----------
@@ -193,7 +208,8 @@ class YTFS(Operations):
 
     def __exists(self, p):
 
-        """Sprawdź czy plik o podanej ścieżce istnieje.
+        """
+        Sprawdź czy plik o podanej ścieżce istnieje.
 
         Parameters
         ----------
@@ -211,7 +227,7 @@ class YTFS(Operations):
             tid = self.__pathToTuple(p)
 
         return ((not tid[0] and not tid[1]) or (tid[0] in self.searches and not tid[1]) or (tid[0] in self.searches and
-            tid[1] in self.searches[tid[0]])) #TODO dodać warunek dla YTFS.PathType.ctrl
+            tid[1] in self.searches[tid[0]]))
 
     def _pathdec(method):
 
@@ -282,7 +298,7 @@ class YTFS(Operations):
         except KeyError:
             raise FuseOSError(errno.ENOENT)
 
-        return ['.', '..'] + ret #TODO ctrl
+        return ['.', '..'] + ret
 
     @_pathdec
     def mkdir(self, tid, mode):
@@ -297,9 +313,7 @@ class YTFS(Operations):
         if self.__exists(tid):
             raise FuseOSError(errno.EEXIST)
 
-        search_results = YTACTIONS.SEARCH(tid[0]) #TODO
-
-        self.searches[tid[0]] = {sr.TITLE: YTSTOR(sr) for sr in search_results} #TODO
+        self.searches[tid[0]] = YTActions(tid[0])
 
         return 0
 
@@ -339,35 +353,38 @@ class YTFS(Operations):
         if not self.__exists(tid):
             raise FuseOSError(errno.ENOENT)
 
-        self.searches[tid[0]][tid[1]].INIT() #TODO odwołanie do obiektu YTstor
+        yts = self.searches[tid[0]][tid[1]]
+
+        try:
+            if yts.INIT(): #TODO odwołanie do obiektu YTstor
+                return self.fds.push(yts) #zwracamy deskryptor (powiązanie z YTStor)
+            else:
+                raise FuseOSError(errno.ENOENT) #FIXME? nie wiem czy pasi
+
+        except AttributeError:
+            return self.fds.push(None) #zwracamy deskryptor (nie potrzeba żadnego powiązania dla pliku sterującego)
 
     @_pathdec
     def read(self, tid, length, offset, fh):
 
         """Odczyt z pliku."""
 
-        d_tid = self.fds[fh]
-        if tid != d_tid:
-            raise FuseOSError(errno.EINVAL)
+        try:
+            return self.fds[fh].READ(offset, offset + length) #TODO
 
-        pt = self.PathType.get(tid)
+        except AttributeError: #plik sterujący
 
-        if pt is not self.PathType.file and pt is not self.PathType.ctrl:
-            raise FuseOSError(errno.EISDIR)
+            d = (tid[1] == " next" and 1) or (tid[1] == " prev" and -1) or 0
 
-        if fh not in self.fds:
+            try:
+                self.searches[tid[0]].updateBounds(dir_ = d)
+            except KeyError:
+                raise FuseOSError(errno.EINVAL) #no coś nie pykło
+
+            return self.__sh_script[offset:offset+length] #FIXME? w razie jakby zakres był zły
+
+        except KeyError: #deskryptor nie istnieje
             raise FuseOSError(errno.EBADF)
-
-        if not self.__exists(tid):
-            raise FuseOSError(errno.ENOENT)
-
-        if pt is self.PathType.file:
-            return self.searches[tid[0]][tid[1]].READ(offset, offset + length) #TODO
-
-        elif pt is self.PathType.ctrl:
-
-            #TODO: przeładowanie katalogu - umieszczenie w nim kolejnych wyników
-            return self.__sh_script
 
     @_pathdec
     def release(self, tid, fh):
@@ -375,11 +392,9 @@ class YTFS(Operations):
         """Zamknięcie pliku (?)"""
 
         try:
-            if self.fds[fh] == tid:
-                del self.fds[fh]
-            else:
-                raise FuseOSError(errno.EINVAL)
+            del self.fds[fh]
+
         except KeyError:
-            raise FuseOSError(errno.EINVAL)
+            raise FuseOSError(errno.EBADF)
 
         return 0
