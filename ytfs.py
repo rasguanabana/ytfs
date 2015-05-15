@@ -6,14 +6,17 @@
 #                                                                                                                  ####
 
 import os
+import sys
 import stat
 import errno
 from enum import Enum
 from copy import deepcopy
+from time import time
 
 from fuse import FUSE, FuseOSError, Operations
 
 from ytstor import YTStor
+#YTStor = type(None)
 from ytactions import YTActions
 
 class fd_dict(dict):
@@ -36,7 +39,7 @@ class fd_dict(dict):
             Deskryptor do pliku.
         """
 
-        if not isinstance(yts, (YTStor, type(None)):
+        if not isinstance(yts, (YTStor, type(None))):
             raise TypeError("Expected YTStor object or None.")
 
         k = 0
@@ -89,7 +92,7 @@ class YTFS(Operations):
                                 # Obiekt YTStor przechowuje wszystkie potrzebne informacje o filmie, nie tylko dane
                                 # dane multimedialne.
 
-        self.fds = dict()       # Słownik fd_dict wiążący będące w użyciu deskryptory z identyfikatorami filmów.
+        self.fds = fd_dict()    # Słownik fd_dict wiążący będące w użyciu deskryptory z identyfikatorami filmów.
                                 # Klucz: deskryptor
                                 # Wartość: krotka (katalog, nazwa pliku bez rozszerzenia)
                                 # Przykład:
@@ -126,7 +129,7 @@ class YTFS(Operations):
             """
 
             try:
-                p = self.__pathToTuple(p) #próba konwersji, jeśli p jest stringiem. inaczej nic się nie stanie
+                p = YTFS._YTFS__pathToTuple(p) #próba konwersji, jeśli p jest stringiem. inaczej nic się nie stanie
             except TypeError:
                 pass
 
@@ -141,7 +144,7 @@ class YTFS(Operations):
 
             elif p[0] and p[1]:
                 
-                if p[0][0] = ' ':
+                if p[0][0] == ' ':
                     return YTFS.PathType.ctrl
                 else:
                     return YTFS.PathType.file
@@ -223,25 +226,25 @@ class YTFS(Operations):
 
         """
 
-        if not isinstance(p, tuple) and isinstance(p, str):
-            tid = self.__pathToTuple(p)
+        try:
+            p = self.__pathToTuple(p)
+        except TypeError:
+            pass
 
-        return ((not tid[0] and not tid[1]) or (tid[0] in self.searches and not tid[1]) or (tid[0] in self.searches and
-            tid[1] in self.searches[tid[0]]))
+        return ((not p[0] and not p[1]) or (p[0] in self.searches and not p[1]) or (p[0] in self.searches and
+            p[1] in self.searches[p[0]]))
 
     def _pathdec(method):
 
         """Dekorator podmieniający argument path z reprezentacji tekstowej na identyfikator krotkowy."""
 
-        def mod(self, *args):
+        def mod(self, path, *args):
 
-            args = list(args)
             try:
-                args[0] = self.__pathToTuple(args[0])
+                return method(self, self.__pathToTuple(path), *args)
+
             except ValueError:
                 raise FuseOSError(errno.EINVAL)
-
-            return method(self, *args)
 
         return mod
 
@@ -353,15 +356,15 @@ class YTFS(Operations):
         if not self.__exists(tid):
             raise FuseOSError(errno.ENOENT)
 
-        yts = self.searches[tid[0]][tid[1]]
-
         try:
+            yts = self.searches[tid[0]][tid[1]]
+
             if yts.INIT(): #TODO odwołanie do obiektu YTstor
                 return self.fds.push(yts) #zwracamy deskryptor (powiązanie z YTStor)
             else:
                 raise FuseOSError(errno.ENOENT) #FIXME? nie wiem czy pasi
 
-        except AttributeError:
+        except KeyError:
             return self.fds.push(None) #zwracamy deskryptor (nie potrzeba żadnego powiązania dla pliku sterującego)
 
     @_pathdec
@@ -398,3 +401,10 @@ class YTFS(Operations):
             raise FuseOSError(errno.EBADF)
 
         return 0
+
+
+def main(mountpoint):
+    FUSE(YTFS(), mountpoint, foreground=True)
+
+if __name__ == '__main__':
+    main(sys.argv[1])
