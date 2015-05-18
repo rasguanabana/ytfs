@@ -377,10 +377,15 @@ class YTFS(Operations):
 
         except AttributeError: #plik sterujący
 
-            d = (tid[1] == " next" and 1) or (tid[1] == " prev" and -1) or 0
+            if tid[1] == " next":
+                d = 1
+            elif tid[1] == " prev":
+                d = 0
+            else:
+                d = None
 
             try:
-                self.searches[tid[0]].updateBounds(dir_ = d)
+                self.searches[tid[0]].updateResults(d)
             except KeyError:
                 raise FuseOSError(errno.EINVAL) #no coś nie pykło
 
