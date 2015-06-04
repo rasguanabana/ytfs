@@ -3,6 +3,7 @@ import requests
 from ytstor import YTStor
 
 from copy import copy, deepcopy
+from collections import OrderedDict
 
 class YTActions():
 
@@ -13,16 +14,21 @@ class YTActions():
     ### doc dla init
     """
 
-    visible_files = dict()      # Słownik wiążący tytuł filmu z obiektem YTStor. Zawiera tylko te pliki, które mają być
-                                # w danej chwili widoczne dla użytkownika (bez plików sterujących).
-                                # 
-                                # visible_files = {
-                                #                   "Foo": YTStor(yid),
-                                #                   ...
-                                #                 }
+    avail_files = OrderedDict()             # OrderedDict zawierający krotki następującej postaci:
+                                            #
+                                            # avail_files = {
+                                            #                   "token": (adj_tokens, files),
+                                            #                   ...
+                                            #               }
+                                            #
+                                            # adj_tokens to sąsiednie tokeny, files to pliki danego wyszukiwania
+                                            # (tak jak poniżej).
 
-    page_tokens = [None, None]  # Tokeny służące do wczytywania następnych/poprzednich stron wyników wyszukiwania
-    last_dir = None             # Ostatnio obrany kierunek w nawigowaniu po wynikach wyszukiwania FIXME: threads
+    visible_files = None                    # Bieżące wyniki wyszukiwania - te są widoczne w katalogu
+
+    adj_tokens = {False: None, True: None}  # Tokeny sąsiednich stron wyszukiwania.
+
+    vf_iter = None                          # Używane przez: __iter__, __next__
 
     def __init__(self, search_query, max_results = 10):
 
@@ -52,10 +58,12 @@ class YTActions():
 
     def __iter__(self):
 
-        if self.start != 0:
-            ctrl = [' prev', ' next']
-        else:
-            ctrl = [' next']
+        ctrl = []
+
+        if self.adj_tokens[False] is not None:
+            ctrl += [ " prev" ]
+        if self.adj_tokens[True] is not None:
+            ctrl += [ " next" ]
 
         self.vf_iter = iter(ctrl + list(self.visible_files))
 
@@ -71,56 +79,68 @@ class YTActions():
 
     def __in__(self, arg):
 
-        return arg in self.visible_files or (self.page_tokens[0] is not None and arg == " prev") or (self.page_tokens[0] is None and self.page_tokens[1] is not None and arg == " next") #FIXME? cza sprawdzić
+        return arg in self.visible_files or (self.adj_tokens[0] is not None and arg == " prev") or (self.adj_tokens[0] is None and self.adj_tokens[1] is not None and arg == " next") #FIXME? cza sprawdzić
 
-    def updateResults(self, dir_=None):
+    def updateResults(self, forward=None):
 
         """
         Odśwież wyniki wyszukiwania lub przejdź na inną ich "stronę".
 
         Parameters
         ----------
-        dir_: int or None, optional
-            Kierunek przemieszczania się w wynikach wyszukiwania. 0 - strona do tyłu, 1 - strona do przodu.
+        forward: bool or None, optional
+            Czy poruszać się do przodu (True lub False). Jeśli None, to pobierana jest pierwsza strona wyszukiwania.
 
         Returns
         -------
         None
         """
 
-        #FIXME to można zrobić ładniej... i tak żeby działało :v
-
-        if (dir_ == 0 and self.last_dir == 1) or (dir_ == 1 and self.last_dir == 0):
-            # kierunek jest odwrotny do poprzedniego, więc zamieniamy bieżacy słownik z backupem
-            # (przy okazji zapewniamy, że zmienne są dobrego typu)
-
-            (self.backup_vfiles, self.visible_files) = (self.visible_files, self.backup_vfiles)
-            (self.backup_pt, self.page_tokens) = (self.page_tokens, self.backup_pt)
-            self.last_dir = dir_
-            return
+        # to wybiera potrzebne nam dane
+        files = lambda x: {i['snippet']['title']: YTStor(i['id']['videoId']) for i in x['items']}
 
         try:
-            if dir_ < 0: dir_ = 2 #chcemy, żeby try się wysypał
-            data = self.__search(self.page_tokens[dir_])
-
-        except IndexError:
-            raise ValueError("Valid values for dir_ are 0 or 1")
-        except TypeError:
-            data = self.__search() # dir_ jest innego typu niż int, więc zajmujemy się pierwszą stroną wyników
-
-        self.backup_pt = deepcopy(self.page_tokens)
-        try:
-            self.page_tokens[0] = data['prevPageToken']
+            if self.adj_tokens[forward] is None: #na wypadek, gdyby ktoś jakimś cudem chciał przekroczyć granicę
+                forward = None
         except KeyError:
-            self.page_tokens[0] = None
+            pass
 
         try:
-            self.page_tokens[1] = data['nextPageToken']
-        except KeyError:
-            self.page_tokens[1] = None
+            try:
+                data = self.avail_files[ self.adj_tokens[forward] ] #może dane są już dostępne lokalnie.
+            except KeyError:
+                recv = self.__search( self.adj_tokens[forward] ) #ni ma, szukamy
+                data = (None, files(recv)) #ujednolicamy format, trochę.
+                                                                                                 
+        except KeyError: #nie siadł indeks w adj_tokens
 
-        self.backup_vfiles = copy(self.visible_files)
-        self.visible_files = { i['snippet']['title']: YTStor(i['id']['videoId']) for i in data['items'] }
+            if forward is None:
+                recv = self.__search()
+                data = (None, files(recv)) #też
+            else:
+                raise ValueError("Valid values for forward are True, False or None (default).")
 
-        if dir_ is not None:
-            self.last_dir = dir_
+        if len(self.avail_files) > 4:
+            self.avail_files.popitem(False) #wyrzucamy najstarsze dane
+
+        adj_t = deepcopy(self.adj_tokens) # to zaraz wpiszemy do avail_files, teraz uaktualniamy self.adj_tokens.
+
+        if data[0] is None: #bierzemy tokeny z pobranych wyników.
+            try:
+                self.adj_tokens[False] = recv['prevPageToken']
+            except KeyError:
+                self.adj_tokens[False] = None
+
+            try:
+                self.adj_tokens[True] = recv['nextPageToken']
+            except KeyError:
+                self.adj_tokens[True] = None
+
+        else: #mamy z avail_files.
+            self.adj_tokens = data[0]
+
+        if forward is not None:
+            #wrzucamy ostatnie wyniki do avail_files:
+            self.avail_files[ self.adj_tokens[not forward] ] = (adj_t, self.visible_files)
+
+        self.visible_files = data[1]
