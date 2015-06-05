@@ -11,24 +11,40 @@ class YTActions():
     Klasa pozwalająca na realizowanie operacji wyszukiwania filmów w serwisie YouTube oraz przechowująca informacje o
     wynikach wyszukiwania.
 
-    ### doc dla init
+    Attributes
+    ----------
+    avail_files: OrderedDict
+        Zawiera krotki następującej postaci:
+
+        avail_files = {
+                        "token": (adj_tokens, files),
+                        ...
+                    }
+                                                                        
+        adj_tokens to sąsiednie tokeny, files to pliki danego wyszukiwania
+        (tak jak poniżej).
+    visible_files: dict
+        Bieżące wyniki wyszukiwania. Kluczem jest nazwa filmu, a wartością obiekt YTStor dla filmu.
+    adj_tokens: dict
+        Słownik tokenów sąsiednich stron wyszukiwania. Pod False znajduje się poprzednia strona, pod True - następna.
+        Inne klucze nie są dozwolone.
+    vf_iter: obj
+        Tu klasa przechowuje iterator pozwalający na listowanie bieżącej zawartości katalogu. Używane przez __iter__
+        i __next__.
+
+    Parameters
+    ----------
+    search_query: str
+        Fraza, wg której wyszukiwane są filmy.
+    max_results: int, optional
+        Ilość wyszukiwań na "stronę".
     """
 
-    avail_files = OrderedDict()             # OrderedDict zawierający krotki następującej postaci:
-                                            #
-                                            # avail_files = {
-                                            #                   "token": (adj_tokens, files),
-                                            #                   ...
-                                            #               }
-                                            #
-                                            # adj_tokens to sąsiednie tokeny, files to pliki danego wyszukiwania
-                                            # (tak jak poniżej).
+    avail_files = OrderedDict()
+    visible_files = None
+    adj_tokens = {False: None, True: None}
 
-    visible_files = None                    # Bieżące wyniki wyszukiwania - te są widoczne w katalogu
-
-    adj_tokens = {False: None, True: None}  # Tokeny sąsiednich stron wyszukiwania.
-
-    vf_iter = None                          # Używane przez: __iter__, __next__
+    vf_iter = None
 
     def __init__(self, search_query, max_results = 10):
 
@@ -42,7 +58,19 @@ class YTActions():
 
     def __search(self, pt=None):
 
-        """ """
+        """
+        Metoda odpowiedzialna za wyszukiwanie w API YouTube.
+
+        Parameters
+        ----------
+        pt: str
+            Token strony z wynikami wyszukiwania. Jeśli None, to pobierana jest pierwsza strona.
+
+        Returns
+        -------
+        results: dict
+            Sparsowany json zwrócony z API YouTube.
+        """
 
         api_fixed_url = "https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&fields=items(id%2Ckind%2Csnippet)%2CnextPageToken%2CprevPageToken"
         api_key = "AIzaSyCPOg5HQfHayQH6mRu4m2PMGc3eHd5lllg"
@@ -97,7 +125,7 @@ class YTActions():
         """
 
         # to wybiera potrzebne nam dane
-        files = lambda x: {i['snippet']['title']: YTStor(i['id']['videoId']) for i in x['items']}
+        files = lambda x: {i['snippet']['title'].replace('/', '\\'): YTStor(i['id']['videoId']) for i in x['items']}
 
         try:
             if self.adj_tokens[forward] is None: #na wypadek, gdyby ktoś jakimś cudem chciał przekroczyć granicę

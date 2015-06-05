@@ -35,7 +35,7 @@ class fd_dict(dict):
      
         Returns
         -------
-        descriptor : int
+        descriptor: int
             Deskryptor do pliku.
         """
 
@@ -52,53 +52,62 @@ class fd_dict(dict):
 
 class YTFS(Operations):
 
-    """Główna klasa ytfs :)"""
+    """
+    Główna klasa ytfs.
 
-    __sh_script = b"#!/bin/sh\n" #zawartość pliku sterującego (pusty skrypt)
+    Attributes
+    ----------
+    st: dict
+        Podstawowe atrybuty plików.
+    searches: dict
+        Słownik będący głównym interfejsem do przechowywanych przez system plików danych o poszczególnych
+        wyszukiwaniach i ich wynikach, czyli filmach. Struktura:
+        
+          searches = {
+              'wyszukiwana fraza 1':  YTActions({
+                                       'tytul1': <YTStor obj>,
+                                       'tytul2': <YTStor obj>,
+                                       ...
+                                      }),
+              'wyszukiwana fraza 2':  YTActions({ ... }),
+              ...
+          }
+        
+        Obiekt YTStor przechowuje wszystkie potrzebne informacje o filmie, nie tylko dane dane multimedialne.
+
+        Uwaga: dla uproszczenia rozszerzenia w nazwach plików są obecne wyłącznie podczas wypisywania zawartości
+        katalogu. We wszelkich innych operacjach są upuszczane.
+    fds: fd_dict
+        Słownik fd_dict wiążący będące w użyciu deskryptory z identyfikatorami filmów.
+        Klucz: deskryptor
+        Wartość: krotka (katalog, nazwa pliku bez rozszerzenia)
+    __sh_script: str
+        Zawartość zwracana przy odczycie pliku sterującego (pusty skrypt). System ma mieć wrażenie, że coś wykonał.
+        Faktyczną operacją zajmuje się sam ytfs podczas otwarcia pliku sterującego.
+    """
+
+    st = {
+
+        'st_mode': stat.S_IFDIR | 0o555,
+        'st_ino': 0,
+        'st_dev': 0,
+        'st_nlink': 2,
+        'st_uid': os.getuid(),
+        'st_gid': os.getgid(),
+        'st_size': 4096,
+        'st_atime': 0,
+        'st_mtime': 0,
+        'st_ctime': 0
+    }
+
+    searches = dict()
+    fds = fd_dict()
+
+    __sh_script = b"#!/bin/sh\n"
 
     def __init__(self):
 
         """Inicjalizacja obiektu"""
-
-        self.st = {
-
-            'st_mode': stat.S_IFDIR | 0o555,
-            'st_ino': 0,
-            'st_dev': 0,
-            'st_nlink': 2,
-            'st_uid': os.getuid(),
-            'st_gid': os.getgid(),
-            'st_size': 4096,
-            'st_atime': 0,
-            'st_mtime': 0,
-            'st_ctime': 0
-        }
-                                # Uwaga: dla uproszczenia rozszerzenia w nazwach plików są obecne wyłącznie podczas
-                                # wypisywania zawartości katalogu. We wszelkich innych operacjach są upuszczane.
-
-        self.searches = dict()  # Słownik będący głównym interfejsem do przechowywanych przez system plików danych
-                                # o poszczególnych wyszukiwaniach i ich wynikach, czyli filmach. Struktura:
-                                #
-                                #   {
-                                #       'wyszukiwana fraza 1':  YTActions({
-                                #                                'tytul1': <YTStor obj>,
-                                #                                'tytul2': <YTStor obj>,
-                                #                                ...
-                                #                               }),
-                                #       'wyszukiwana fraza 2':  YTActions({ ... }),
-                                #       ...
-                                #   }
-                                #
-                                # Obiekt YTStor przechowuje wszystkie potrzebne informacje o filmie, nie tylko dane
-                                # dane multimedialne.
-
-        self.fds = fd_dict()    # Słownik fd_dict wiążący będące w użyciu deskryptory z identyfikatorami filmów.
-                                # Klucz: deskryptor
-                                # Wartość: krotka (katalog, nazwa pliku bez rozszerzenia)
-                                # Przykład:
-                                #
-                                # {
-                                #       1: ('wyszukiwana fraza 1', 'tytul1':
 
     class PathType(Enum):
 
@@ -144,7 +153,7 @@ class YTFS(Operations):
 
             elif p[0] and p[1]:
                 
-                if p[0][0] == ' ':
+                if p[1][0] == ' ':
                     return YTFS.PathType.ctrl
                 else:
                     return YTFS.PathType.file
@@ -253,6 +262,8 @@ class YTFS(Operations):
 
         """Atrybuty pliku."""
 
+        print(">> getattr")
+
         if not self.__exists(tid):
             raise FuseOSError(errno.ENOENT)
 
@@ -268,13 +279,15 @@ class YTFS(Operations):
             st['st_mode'] = stat.S_IFREG | 0o444
             st['st_nlink'] = 1
 
-            st['st_size'] = self.searches[tid[0]][tid[1]].SIZE #TODO
+            st['st_size'] = self.searches[ tid[0] ][ tid[1] ].info['filesize']
 
         elif pt is self.PathType.ctrl:
 
-            st['st_mode'] = stat.S_IFREG | 0o555 #te uprawnienia chyba trzeba ciutkę podreperować
+            st['st_mode'] = stat.S_IFREG | 0o555 #te uprawnienia chyba trzeba ciutkę podreperować (FIXME?)
             st['st_nlink'] = 1
             st['st_size'] = len(self.__sh_script)
+
+        print(tid, st)
 
         return st
 
@@ -282,6 +295,8 @@ class YTFS(Operations):
     def readdir(self, tid, fh):
 
         """Listowanie katalogu."""
+
+        print(">> readdir")
 
         ret = []
         pt = self.PathType.get(tid)
@@ -308,6 +323,8 @@ class YTFS(Operations):
 
         """Utworzenie katalogu."""
 
+        print(">> mkdir")
+
         pt = self.PathType.get(tid)
 
         if pt is self.PathType.invalid or pt is self.PathType.file:
@@ -317,6 +334,7 @@ class YTFS(Operations):
             raise FuseOSError(errno.EEXIST)
 
         self.searches[tid[0]] = YTActions(tid[0])
+        self.searches[tid[0]].updateResults()
 
         return 0
 
@@ -324,6 +342,8 @@ class YTFS(Operations):
     def rmdir(self, tid):
 
         """Usunięcie katalogu."""
+
+        print(">> rmdir")
 
         pt = self.PathType.get(tid)
 
@@ -345,6 +365,8 @@ class YTFS(Operations):
 
         """Otwarcie pliku."""
 
+        print(">> open")
+
         pt = self.PathType.get(tid)
 
         if pt is not self.PathType.file and pt is not self.PathType.ctrl:
@@ -359,8 +381,10 @@ class YTFS(Operations):
         try:
             yts = self.searches[tid[0]][tid[1]]
 
-            if yts.INIT(): #TODO odwołanie do obiektu YTstor
-                return self.fds.push(yts) #zwracamy deskryptor (powiązanie z YTStor)
+            if yts.obtainInfo(): #FIXME bo brzydko
+                fh = self.fds.push(yts)
+                yts.registerHandler(fh)
+                return fh #zwracamy deskryptor (powiązanie z YTStor)
             else:
                 raise FuseOSError(errno.ENOENT) #FIXME? nie wiem czy pasi
 
@@ -372,15 +396,17 @@ class YTFS(Operations):
 
         """Odczyt z pliku."""
 
+        print(">> read", offset, length, offset + length)
+
         try:
-            return self.fds[fh].READ(offset, offset + length) #TODO
+            return self.fds[fh].read(offset, length, fh)
 
         except AttributeError: #plik sterujący
 
             if tid[1] == " next":
-                d = 1
+                d = True
             elif tid[1] == " prev":
-                d = 0
+                d = False
             else:
                 d = None
 
@@ -399,11 +425,20 @@ class YTFS(Operations):
 
         """Zamknięcie pliku (?)"""
 
+        print(">> release")
+        print(self.fds)
+
+        try:
+            del self.fds[fh].dl_control[fh]
+        except (KeyError, AttributeError):
+            pass
+
         try:
             del self.fds[fh]
-
         except KeyError:
             raise FuseOSError(errno.EBADF)
+
+        print(self.fds)
 
         return 0
 
