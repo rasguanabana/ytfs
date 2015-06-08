@@ -15,9 +15,9 @@ from time import time
 
 from fuse import FUSE, FuseOSError, Operations
 
-from ytstor import YTStor
+from stor import YTStor
 #YTStor = type(None)
-from ytactions import YTActions
+from actions import YTActions
 
 class fd_dict(dict):
 

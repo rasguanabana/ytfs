@@ -1,6 +1,6 @@
 import requests
 
-from ytstor import YTStor
+from stor import YTStor
 
 from copy import copy, deepcopy
 from collections import OrderedDict
