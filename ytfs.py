@@ -111,7 +111,22 @@ class YTFS(Operations):
 
     class PathType(Enum):
 
-        """Czytelna reprezentacja typu podanego identyfikatora krotkowego."""
+        """
+        Czytelna reprezentacja typu podanego identyfikatora krotkowego.
+
+        Attributes
+        ----------
+        invalid: int
+            Ścieżka nieprawidłowa
+        main: int
+            Katalog główny
+        subdir: int
+            Podkatalog (katalog wyszukiwania)
+        file: int
+            Plik (wynik wyszukiwania)
+        ctrl: int
+            Plik kontrolny
+        """
 
         invalid = 0
         main = 1

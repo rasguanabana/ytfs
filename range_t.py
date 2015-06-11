@@ -2,14 +2,24 @@ from copy import deepcopy
 
 class range_t():
 
-    """klasa zakresów. służy do prostego zapisywania dostępnych zakresów danych
-        prawe krańce są zawsze otwarte, lewe są zawsze zamknięte."""
+    """
+    Klasa pozwalająca na prosty zapis wielu zakresów w jednym obiekcie (multiple range).
+    Podzakresy są reprezentowane przez dwuelementowe krotki, gdzie pierwszy element to lewy kraniec przedziału, a drugi
+    to prawy. Lewy jest zawsze domknięty, a prawy zawsze otwarty (analogicznie jak w obiekcie typu range).
 
+    Attributes
+    ----------
+    __has: set
+        zbiór podzakresów.
+
+    Parameters
+    ----------
+    initset: set, optional
+        Początkowy zbiór składowych podzakresów. Domyślnie pusty.
+    """
 
     __has = set() #zbiór posiadanych zakresów
     def __init__(self, initset=set()):
-
-        """inicjalizacja."""
 
         if not isinstance(initset, set):
             raise TypeError("Expected set of tuples")
@@ -20,14 +30,37 @@ class range_t():
 
         self.__has = initset
         self.__optimize()
-        #chyba dobrze by było zrobić asserta, który potwierdzi, że podobszary na siebie nie zachodzą. przynajmniej na czas testów.
 
+    def __match_l(self, k, set_):
 
-    __match_l = lambda self, k, set_: {r for r in set_ if k[0] in range(*r) or k[1] in range(*r) or (k[0] < r[0] and k[1] >= r[1])}
-                                                    #start lub end zawierają się w podzakresie, start i end okalają zakres
+        """
+        Metoda szukająca zachodzących na k podzakresów ze zbioru set_.
+
+        Parameters
+        ----------
+        k: tuple or list or range
+            Zakres, dla którego sprawdzamy nachodzące podzakresy z set_.
+        set_: set
+            Zbiór podzakresów.
+
+        Returns
+        -------
+        matched: set
+            Zbiór podzakresów ze zbioru set_ zachodzących na k.
+        """
+
+        return {r for r in set_ if k[0] in range(*r) or k[1] in range(*r) or (k[0] < r[0] and k[1] >= r[1])}
+                                   #k częściowo lub w całości w r            #r zawiera się w całości w k
     def __optimize(self):
 
-        """łączenie stykających się/nachodzących podzakresów"""
+        """
+        Połącz nachodzące na siebie lub stykające się podzakresy zapisane w atrybucie __has. Wywoływane z wszystkich
+        metod, które modyfikują zawartość obiektu.
+
+        Returns
+        -------
+        None
+        """
 
         #szukanie "kolizji" i sumowanie podzakresów:
         pre = deepcopy(self.__has)
@@ -49,28 +82,43 @@ class range_t():
                 post.add(to_add) #w przeciwnym razie dodajemy sumę do wyniku
 
         #spawanie:
-        d = dict(post) #pomocniczy słownik
-        l = list(d.keys()) #klucze, po których będziemy iterować
+        d = dict(post) #pomocniczy słownik, którego kluczami są lewe krańce, a wartościami prawe.
+        #l = list(d.keys()) #klucze, po których będziemy iterować
 
         (ret, used) = (set(), set())
-        for start in l:
-            if start in used: continue #chyba muszę zamienić na while'a
+        for start in d:
+            if start in used: continue #musimy to sprawdzać, bo poniżej pętla while może przeskoczyć kilka kluczy.
 
             end = start
             try:
                 while True:
-                    end = d[end] #czaisz magię? krotki (start, end) zostały zamienione na start: end, zatem, jeśli podzakresy się stykają, to end będzie początkiem innego podzakresu, a więc kluczem w słowniku, pod którym jest koniec, albo kolejny indeks.
+                    end = d[end] #Magic! Krotki (start, end) zostały zamienione na start: end, zatem, jeśli podzakresy
+                                 #się stykają, to end będzie początkiem innego podzakresu, a więc kluczem w słowniku,
+                                 #pod którym jest koniec, albo kolejny indeks.
+                                 #Pętla wykona się zawsze przynajmniej raz.
                     used.add(end)
             except KeyError: #end nie jest kluczem, więc przerywamy while'a.
                 ret.add((start, end))
         
-        self.__has = ret #iii zapis!
+        self.__has = ret #zapis!
 
     def __val_convert(self, val): #chyba przerobię to na dekorator dla wszystkich funkcji, które dostają val.
 
-        """konwertuje dane wejściowe na krotkę (start, end)"""
+        """
+        Konwertuj dane wejściowe na krotkę (start, end)
 
-        converted = (0, 0)
+        Parameters
+        ----------
+        val: int or tuple or list or range
+            Dwuelementowy obiekt przedstawiający zakres lub liczba całkowita.
+
+        Returns
+        -------
+        converted: tuple
+            Krotka reprezentująca zakres.
+        """
+
+        converted = (0, 0) #to tak w razie czego...
 
         #zamiana val na krotkę (start, end):
 
@@ -92,38 +140,96 @@ class range_t():
 
     def contains(self, val):
 
-        """sprawdza, czy dana wartość lub zakres jest zawarta w zakresie.
-            zwraca długość pokrywających się zakresów."""
+        """
+        Sprawdź, czy dana wartość lub zakres jest zawarta w obiekcie.
+
+        Parameters
+        ----------
+        val: int or tuple or list or range
+            Badany zakres lub liczba całkowita.
+
+        Returns
+        -------
+        retlen: int
+            Długość pokrywających się z val obszarów.
+        """
 
         (start, end) = self.__val_convert(val) #konwersja
 
         retlen = 0
         for r in self.__has:
             if start < r[1] and end > r[0]:
-                retlen += ((end < r[1] and end) or r[1]) - ((start > r[0] and start) or r[0]) #chyba mam pierdolca na punkcie zwięzłego kodu :x
+                retlen += ((end < r[1] and end) or r[1]) - ((start > r[0] and start) or r[0]) #chyba mam bzika na punkcie zwięzłego kodu :x
 
         return retlen
 
     def __contains__(self, val):
-        return bool(self.contains(val))
+
+        """
+        Metoda pozwalająca na użycie operatora in.
+
+        Parameters
+        ----------
+        val: int or tuple or list or range
+            Badany zakres lub liczba całkowita.
+
+        Returns
+        -------
+        bool
+            True, jeśli cały badany zakres zawiera się w obiekcie. W przeciwnym razie False.
+        """
+        
+        conv = self.__val_convert(val) #konwersja
+        return self.contains(val) == conv[1] - conv[0]
 
     def match(self, val):
 
-        """zwraca pokrywające się z val podzakresy"""
+        """
+        Znajdź pokrywające się z val podzakresy. De facto jest widocznym wrapperem ukrytego __match_l.
+
+        Parameters
+        ----------
+        val: int or tuple or list or range
+            Badany zakres lub liczba całkowita.
+
+        Returns
+        -------
+        set
+            Zbiór pokrywających się podzakresów.
+        """
         
         conv = self.__val_convert(val) #konwersja
 
         return self.__match_l(conv, self.__has)
-        #return sorted([r for r in self.__has if start in range(*r) or end in range(*r) or (start < r[0] and end >= r[1])]) #jak wyżej XD
-                                                #start lub end zawierają się w podzakresie, start i end okalają zakres
 
     def toset(self):
+
+        """
+        Konwersja obiektu na zbiór podzakresów
+
+        Returns
+        -------
+        set
+            Zwracany jest ukryty atrybut __has.
+        """
 
         return self.__has
 
     def __add__(self, val):
 
-        """dodawanie zakresów. możliwe jest dodawanie jednego spójnego podzakresu naraz, albo obiektu range_t."""
+        """
+        Dodawanie zakresów. możliwe jest dodawanie jednego spójnego podzakresu naraz, albo obiektu range_t.
+
+        Parameters
+        ----------
+        val: int or tuple or list or range
+            Liczba całkowita lub zakres przeznaczony do dodania.
+
+        Returns
+        -------
+        range_t
+            Obiekt range_t poszerzony o val.
+        """
 
         if not isinstance(val, range_t):
             #sanitize it, bo czemu nie. przy okazji sprawdzamy, czy dane wejściowe są ok.
@@ -139,7 +245,19 @@ class range_t():
 
     def __sub__(self, val):
 
-        """odejmowanie (na analogicznych zasadach co dodawanie)."""
+        """
+        Odejmowanie (na analogicznych zasadach co dodawanie).
+        
+        Parameters
+        ----------
+        val: int or tuple or list or range
+            Liczba całkowita lub zakres przeznaczony do odjęcia.
+
+        Returns
+        -------
+        range_t
+            Obiekt range_t pozbawiony val.
+        """
 
         if not isinstance(val, range_t):
             #sanitize it!
@@ -156,7 +274,8 @@ class range_t():
             __has.difference_update(common) #usuwamy kolizje, bo musimy je przeciąć
 
             minmax = (min({l[0] for l in common}), max({r[1] for r in common}))
-            #z kolizyjnych podzakresów zawsze dostaniemy po odjęciu dwa podzakresy albo jeden, jeśli v zachodzi na jeden podzakres jednym końcem
+            #z kolizyjnych podzakresów zawsze dostaniemy po odjęciu dwa podzakresy albo jeden, jeśli v zachodzi na
+            #jeden podzakres jednym końcem
             if minmax[0] < v[0]: __has.add((minmax[0], v[0]))
             if minmax[1] > v[1]: __has.add((v[1], minmax[1]))
 
@@ -164,7 +283,14 @@ class range_t():
 
     def __len__(self):
 
-        """suma długości spójnych podzakresów."""
+        """
+        Długość obiektu.
+
+        Returns
+        -------
+        ret: int
+            Suma długości posiadanych podzakresów.
+        """
 
         ret = 0
         for t in self.__has:
@@ -174,21 +300,20 @@ class range_t():
 
     def __eq__(self, val):
 
-        """=="""
+        """
+        Operacja porównania.
+
+        Parameters
+        ----------
+        val: range_t
+            Obiekt range_t do porównania.
+
+        Returns
+        -------
+        bool
+            True, jeśli zbiór posiadanych podzakresów jest identyczny jak w obiekcie val.
+        """
         if not isinstance(val, range_t):
             raise ValueError("Expected range_t to compare.")
 
         return self.__has == val.toset()
-
-#    def diff(self, val): #wygląda na niepotrzebne...
-#
-#        """zwraca niezawierające się w zakresie podzbióry val"""
-#        val = self.__val_convert(val)
-#        #zakresy kolizyjne:
-#        common = self.__match_l(val, self.__has) #zbieramy podzakresy kolizyjne
-#        lav = range_t({val}) #przerabiamy val na range_t, a dalej magic :)
-#
-#        for sr in common:
-#            lav -= sr
-#
-#        return lav # \o/
