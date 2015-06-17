@@ -1,4 +1,5 @@
 from copy import deepcopy
+from threading import Event
 
 class range_t():
 
@@ -10,7 +11,9 @@ class range_t():
     Attributes
     ----------
     __has: set
-        zbiór podzakresów.
+        Zbiór podzakresów.
+    waitings: dict
+        Słownik zakresów, na które mogą oczekiwać wątki. Kluczem jest zakres, wartością obiekt threading.Event
 
     Parameters
     ----------
@@ -18,8 +21,10 @@ class range_t():
         Początkowy zbiór składowych podzakresów. Domyślnie pusty.
     """
 
-    __has = set() #zbiór posiadanych zakresów
     def __init__(self, initset=set()):
+
+        self.__has = set() #zbiór posiadanych zakresów
+        self.waitings = dict()
 
         if not isinstance(initset, set):
             raise TypeError("Expected set of tuples")
@@ -99,8 +104,10 @@ class range_t():
                     used.add(end)
             except KeyError: #end nie jest kluczem, więc przerywamy while'a.
                 ret.add((start, end))
-        
+
         self.__has = ret #zapis!
+
+        self.checkWaitings() #sprawdzamy, czy ktoś na nas nie czeka, może pojawiły się nowe zakresy?
 
     def __val_convert(self, val): #chyba przerobię to na dekorator dla wszystkich funkcji, które dostają val.
 
@@ -215,10 +222,11 @@ class range_t():
 
         return self.__has
 
-    def __add__(self, val):
+    def __add(self, val):
 
         """
-        Dodawanie zakresów. możliwe jest dodawanie jednego spójnego podzakresu naraz, albo obiektu range_t.
+        Metoda pomocnicza, dodawanie zakresów. możliwe jest dodawanie jednego spójnego podzakresu naraz, albo
+        obiektu range_t.
 
         Parameters
         ----------
@@ -227,8 +235,8 @@ class range_t():
 
         Returns
         -------
-        range_t
-            Obiekt range_t poszerzony o val.
+        __has: set
+            Zbiór self.__has poszerzony o nowy przedział.
         """
 
         if not isinstance(val, range_t):
@@ -241,7 +249,46 @@ class range_t():
         __has = deepcopy(self.__has) #po prostu dodajemy do zbioru, następnie zwracamy niu abdżekt
         __has.update(val)
 
-        return range_t(__has)
+        return __has
+
+    def __add__(self, val):
+
+        """
+        Obsługa operacji a + b.
+
+        Parameters
+        ----------
+        val: int or tuple or list or range
+            Liczba całkowita lub zakres przeznaczony do dodania.
+
+        Returns
+        -------
+        range_t
+            Nowy obiekt range_t poszerzony o val.
+        """
+
+        return range_t(self.__add(val))
+
+    def __iadd__(self, val):
+
+        """
+        Obsługa operacji a += b. Różni się od __add__ tym, że nie jest tworzony nowy obiekt.
+
+        Parameters
+        ----------
+        val: int or tuple or list or range
+            Liczba całkowita lub zakres przeznaczony do dodania.
+
+        Returns
+        -------
+        self: range_t
+            Zwracany jest bieżący obiekt poszerzony o val.
+        """
+
+        self.__has = self.__add(val)
+        self.__optimize()
+
+        return self
 
     def __sub__(self, val):
 
@@ -317,3 +364,33 @@ class range_t():
             raise ValueError("Expected range_t to compare.")
 
         return self.__has == val.toset()
+
+    def checkWaitings(self):
+
+        """
+        Sprawdź, czy zakresy z self.waitings nie zostały uzupełnione. Jeśli tak, to wyemituj zdarzenie i usuń zakres
+        ze słownika.
+        """
+
+        to_rem = set()
+        for e in (e for e in self.waitings if e in self):
+            s = self.waitings[e].set()
+
+        for x in to_rem:
+            del self.waitings[x]
+
+    def setWaiting(self, val):
+        
+        """
+        Zaczekaj na dodanie zakresu do obiektu.
+
+        Parameters
+        ----------
+        val: int or tuple or list or range
+            Liczba całkowita lub zakres, na który chcemy zaczekać
+        """
+
+        conv = self.__val_convert(val) #konwersja
+
+        self.waitings[conv] = Event() # tworzymy zdarzenie i ...
+        self.waitings[conv].wait() # ... czekamy

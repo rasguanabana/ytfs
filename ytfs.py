@@ -9,15 +9,16 @@ import os
 import sys
 import stat
 import errno
+import math
 from enum import Enum
 from copy import deepcopy
 from time import time
+from argparse import ArgumentParser
 
 from fuse import FUSE, FuseOSError, Operations
 
-from stor import YTStor
-#YTStor = type(None)
-from actions import YTActions
+#from stor import YTStor
+from actions import YTActions, YTStor
 
 class fd_dict(dict):
 
@@ -95,6 +96,7 @@ class YTFS(Operations):
         'st_uid': os.getuid(),
         'st_gid': os.getgid(),
         'st_size': 4096,
+        'st_blksize': 512,
         'st_atime': 0,
         'st_mtime': 0,
         'st_ctime': 0
@@ -105,9 +107,11 @@ class YTFS(Operations):
 
     __sh_script = b"#!/bin/sh\n"
 
-    def __init__(self):
+    def __init__(self, av):
 
         """Inicjalizacja obiektu"""
+
+        YTStor._setDownloadManner(av)
 
     class PathType(Enum):
 
@@ -294,13 +298,15 @@ class YTFS(Operations):
             st['st_mode'] = stat.S_IFREG | 0o444
             st['st_nlink'] = 1
 
-            st['st_size'] = self.searches[ tid[0] ][ tid[1] ].info['filesize']
+            st['st_size'] = self.searches[ tid[0] ][ tid[1] ].filesize
 
         elif pt is self.PathType.ctrl:
 
             st['st_mode'] = stat.S_IFREG | 0o555 #te uprawnienia chyba trzeba ciutkę podreperować (FIXME?)
             st['st_nlink'] = 1
             st['st_size'] = len(self.__sh_script)
+
+        st['st_blocks'] = math.ceil(st['st_size'] / st['st_blksize'])
 
         print(tid, st)
 
@@ -458,8 +464,20 @@ class YTFS(Operations):
         return 0
 
 
-def main(mountpoint):
-    FUSE(YTFS(), mountpoint, foreground=True)
+def main(mountpoint, av):
+    FUSE(YTFS(av), mountpoint, foreground=True)
 
 if __name__ == '__main__':
-    main(sys.argv[1])
+    
+    parser = ArgumentParser(description="YTFS - Youtube Filesystem: wyszukuj i odtwarzaj materiały z serwisu Youtube za pomocą operacji na plikach.", epilog="aby pobierać dźwięk oraz wideo należy połączyć flagi -a i -v.")
+    parser.add_argument('mountpoint', type=str, nargs=1, help="punkt montowania")
+    parser.add_argument('-a', action='store_true', default=False, help="pobieraj dźwięk (domyślne).")
+    parser.add_argument('-v', action='store_true', default=False, help="pobieraj obraz")
+
+    x = parser.parse_args()
+
+    av = 0b00
+    if x.a: av |= YTStor.DL_AUD
+    if x.v: av |= YTStor.DL_VID
+
+    main(x.mountpoint[0], av)

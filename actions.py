@@ -1,3 +1,4 @@
+import os
 import requests
 
 from stor import YTStor
@@ -93,7 +94,7 @@ class YTActions():
         if self.adj_tokens[True] is not None:
             ctrl += [ " next" ]
 
-        self.vf_iter = iter(ctrl + list(self.visible_files))
+        self.vf_iter = iter(ctrl + [e + ".mp4" for e in self.visible_files])
 
         return self
 
@@ -103,7 +104,7 @@ class YTActions():
 
     def __getitem__(self, key):
 
-        return self.visible_files[key]
+        return self.visible_files[ os.path.splitext(key)[0] ] #pozbywamy się rozszerzenia, btw.
 
     def __in__(self, arg):
 

@@ -1,7 +1,9 @@
+import os
 import youtube_dl
 import requests
 import tempfile
-from time import time
+from time import time, sleep
+from threading import Event
 
 from range_t import range_t
 
@@ -33,8 +35,38 @@ class Downloader():
             Metoda niczego nie zwraca; dane są bezpośrednio wpisywane do obiektu YTStor.
         """
 
-        yts.data.write(yts.r_session.get(yts.info['url']).content)
-        yts.data.flush()
+        if yts.SET_AV == YTStor.DL_AUD | YTStor.DL_VID:
+
+            with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as d, tempfile.NamedTemporaryFile(prefix='a') as a, tempfile.NamedTemporaryFile(prefix='v') as v:
+                # po opuszczeniu with pliki zostaną usunięte
+
+                v.write(yts.r_session.get(yts.info[0]['url']).content) #pobieramy wideo
+                a.write(yts.r_session.get(yts.info[1]['url']).content) #pobieramy audio
+
+                PP = youtube_dl.postprocessor.FFmpegMergerPP(yts.ytdl)
+                PP.run({'filepath': d.name, '__files_to_merge': (v.name, a.name)}) #łączymy
+
+                _d = d.name
+
+            with open(_d, mode="rb") as d:
+
+                yts.data.write( d.read() )
+                yts.data.flush()
+                yts.filesize = os.path.getsize(_d)
+
+                yts.avail += (0, yts.filesize)
+
+            os.remove(_d)
+
+        else:
+
+            ind = yts.SET_AV - 1 #SET_AV jest równe 1 albo 2
+
+            yts.data.write(yts.r_session.get(yts.info[1 - ind]['url']).content)
+            yts.data.flush()
+            yts.filesize = yts.info[1 - ind]['filesize']
+
+            yts.avail += (0, yts.filesize)
 
 #        yts.dl_control[fh].idle = False
 #
@@ -80,6 +112,8 @@ class YTStor():
         Obiekt trzymający sesję HTTP.
     yid: str
         Identyfikator wideo YouTube.
+    info: dict
+        ... #FIXME
 
     Parameters
     ----------
@@ -87,17 +121,35 @@ class YTStor():
         Identyfikator wideo YouTube.
     """
 
-    data = None
-    dl_control = None
-    avail = None
-    r_session = None
-    info = None
-
-    __ytdl = None
+    DL_VID = 0b10
+    DL_AUD = 0b01
+    SET_AV = 0b11
 
     class DlControl():
         idle = True
         abort = False
+
+    @staticmethod
+    def _setDownloadManner(av):
+
+        """
+        Metoda statyczna ustawiająca atrybut mówiący downloaderowi co ma pobierać.
+
+        Parameters
+        ----------
+        av: int
+            Liczba dwubitowa, której bity mówią o tym co pobieramy. Pierwszy bit odpowiada za audio, drugi za wideo.
+            Do przypisania wartości można użyć wartości YTStor.DL_AUD oraz YTStor.DL_VID. Uwaga: jeśli zaznaczono
+            pobieranie audio i wideo, wówczas pobieranie i łączenie dokonuje się podczas wywołania open, w przeciwnym
+            razie audio/wideo są pobierane dynamicznie (TODO).
+        """
+
+        if not (isinstance(av, int) and 0 <= av <= 3):
+            raise ValueError("av needs to be combination of YTStor.DL_AUD and YTStor.DL_VID");
+
+        if av == 0: av = YTStor.DL_AUD #domyślnie pobieramy audio
+
+        YTStor.SET_AV = av
 
     def __init__(self, yid):
 
@@ -106,13 +158,16 @@ class YTStor():
 
         self.data = tempfile.SpooledTemporaryFile()
         self.dl_control = dict()
+        self.global_dl_lock = False
+
         self.avail = range_t()
+        self.filesize = 4096
+
         self.r_session = requests.Session()
-        self.info = {'filesize': 4096}
 
         self.yid = yid
-        self.__ytdl = youtube_dl.YoutubeDL({"quiet": True})
-        self.__ytdl.add_info_extractor( self.__ytdl.get_info_extractor("Youtube") )
+        self.ytdl = youtube_dl.YoutubeDL({"quiet": True})
+        self.ytdl.add_info_extractor( self.ytdl.get_info_extractor("Youtube") )
 
     #def prepare():
 
@@ -146,7 +201,7 @@ class YTStor():
             Metoda nie zwraca, natomiast w razie niepowodzenia może rzucać wyjątki.
         """
 
-        self.info = self.__ytdl.extract_info(self.yid, download=False)['requested_formats'][1]
+        self.info = self.ytdl.extract_info(self.yid, download=False)['requested_formats']
         return True #FIXME
 
     #def setFormat(self, fmt):
@@ -170,7 +225,27 @@ class YTStor():
         """
 
         self.dl_control[fh] = YTStor.DlControl()
-        Downloader.fetch(self, None, fh)
+
+        if (0, self.filesize) not in self.avail and True: #FIXME - zamiast True sprawdzać av czy jest a+v
+
+            if not self.global_dl_lock:
+
+                print("DL-ing")
+                self.global_dl_lock = True
+
+                #try:
+                Downloader.fetch(self, None, fh)
+                #except:
+                #    self.avail.waitings[(0,1)].set()
+                #    del self.avail.waitings[(0,1)]
+
+                self.global_dl_lock = False
+                print("DL-ed")
+
+            elif self.global_dl_lock:
+
+                print("WAITING")
+                self.avail.setWaiting(fh) # czekamy na cokolwiek, bo i tak preload wypełnia cały plik. fh jest unikalny
         
     def read(self, offset, length, fh):
 
@@ -200,7 +275,7 @@ class YTStor():
 
         #print(self.avail.toset())
 
-        self.data.seek(offset) #?
+        self.data.seek(offset)
         return self.data.read(length) #FIXME - sprawdzanie błędów
 
     #def clean(self, all_data=False):
