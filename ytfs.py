@@ -352,6 +352,34 @@ class YTFS(Operations):
         return 0
 
     @_pathdec
+    def rename(self, old, new):
+
+        """
+        Zmiana nazwy katalogu. Potrzebne z uwagi na to, że wiele menadżerów plików tworzy katalog z domyślną nazwą,
+        co uniemożliwia dokonania wyszukiwania bez użycia cli.
+        """
+
+        new = self.__pathToTuple(new) # new też należy skonwertować.
+
+        if not self.__exists(old):
+            raise FuseOSError(errno.ENOENT)
+
+        if self.PathType.get(old) is not self.PathType.subdir or self.PathType.get(new) is not self.PathType.subdir:
+            raise FuseOSError(errno.EPERM)
+
+        if self.__exists(new):
+            raise FuseOSError(errno.EEXIST)
+
+        self.searches[new[0]] = YTActions(new[0])
+        self.searches[new[0]].updateResults()
+        
+        try:
+            del self.searches[old[0]]
+
+        except KeyError:
+            raise FuseOSError(errno.ENOENT)
+
+    @_pathdec
     def rmdir(self, tid):
 
         """Usunięcie katalogu."""
