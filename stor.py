@@ -3,7 +3,7 @@ import youtube_dl
 import requests
 import tempfile
 from time import time, sleep
-from threading import Event
+from threading import Thread, Event
 
 from range_t import range_t
 
@@ -35,6 +35,8 @@ class Downloader():
             Metoda niczego nie zwraca; dane są bezpośrednio wpisywane do obiektu YTStor.
         """
 
+        print(".")
+
         if yts.SET_AV == YTStor.DL_AUD | YTStor.DL_VID:
 
             with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as d, tempfile.NamedTemporaryFile(prefix='a') as a, tempfile.NamedTemporaryFile(prefix='v') as v:
@@ -60,38 +62,18 @@ class Downloader():
 
         else:
 
-            ind = yts.SET_AV - 1 #SET_AV jest równe 1 albo 2
+            hr = (needed_range[0], needed_range[1] - 1)
 
-            yts.data.write(yts.r_session.get(yts.info[1 - ind]['url']).content)
-            yts.data.flush()
-            yts.filesize = yts.info[1 - ind]['filesize']
+            get = yts.r_session.get(yts.info[2 - yts.SET_AV]['url'], headers={'Range': 'bytes=' + '-'.join(str(i) for i in hr)})
+            yts.data.seek(hr[0])
+            yts.data.write(get.content)
+            yts.data.flush()                            #SET_AV równa się 2 lub 1
 
-            yts.avail += (0, yts.filesize)
+            ret = list( int(s) for s in get.headers.get('content-range').split(' ')[1].split('/')[0].split('-') )
+            ret[1] += 1
 
-#        yts.dl_control[fh].idle = False
-#
-#        r_ran = list(needed_range)
-#        r_len = 0
-#
-#        while r_len != needed_range[1] - needed_range[0]:
-#
-#            r_ran[0] += r_len #przesuwamy lewą granicę, jeśli coś już pobraliśmy
-#
-#            #pobieramy kawałek (w obrębie sesji, więc trzymamy jedno połączenie tcp)
-#            recv = yts.r_session.get(yts.info['url'], headers={'Range': 'bytes=' + str(r_ran[0]) + "-" + str(r_ran[1] - 1)})
-#
-#            print("DBG", recv.content[0:128], recv.content[-128:])
-#
-#            try:
-#                r_len += yts.data.write(recv.content)
-#                yts.data.flush()
-#            except:
-#                raise Downloader.FetchError("!")
-#
-#            yts.avail += tuple(r_ran) #pobrane, więc odnotowujemy, że mamy taki dane.
-#
-#        yts.dl_control[fh].idle = True
-#        yts.dl_control[fh].abort = False
+            yts.avail += tuple(ret)
+            yts.processing_range -= needed_range
 
 
 class YTStor():
@@ -161,6 +143,9 @@ class YTStor():
         self.global_dl_lock = False
 
         self.avail = range_t()
+        self.safe_range = range_t()
+        self.processing_range = range_t()
+
         self.filesize = 4096
 
         self.r_session = requests.Session()
@@ -168,23 +153,6 @@ class YTStor():
         self.yid = yid
         self.ytdl = youtube_dl.YoutubeDL({"quiet": True})
         self.ytdl.add_info_extractor( self.ytdl.get_info_extractor("Youtube") )
-
-    #def prepare():
-
-    #    """
-    #    Przygotuj obiekt do pobierania. Tworzone są wymagane ku temu atrybuty klasy.
-
-    #    Parameters
-    #    ----------
-    #    None
-
-    #    Returns
-    #    -------
-    #    None
-    #    """
-
-    #    self.data = tempfile.SpooledTemporaryFile()
-    #    self.dl_control = None #TODO
 
     def obtainInfo(self):
 
@@ -202,12 +170,9 @@ class YTStor():
         """
 
         self.info = self.ytdl.extract_info(self.yid, download=False)['requested_formats']
+        self.filesize = self.info[2 - self.SET_AV]['filesize']
+
         return True #FIXME
-
-    #def setFormat(self, fmt):
-
-    #    """ """
-    #    pass
     
     def registerHandler(self, fh):
 
@@ -226,11 +191,10 @@ class YTStor():
 
         self.dl_control[fh] = YTStor.DlControl()
 
-        if (0, self.filesize) not in self.avail and True: #FIXME - zamiast True sprawdzać av czy jest a+v
+        if (0, self.filesize) not in self.avail and self.SET_AV == YTStor.DL_AUD | YTStor.DL_VID:
 
             if not self.global_dl_lock:
 
-                print("DL-ing")
                 self.global_dl_lock = True
 
                 #try:
@@ -240,11 +204,8 @@ class YTStor():
                 #    del self.avail.waitings[(0,1)]
 
                 self.global_dl_lock = False
-                print("DL-ed")
 
             elif self.global_dl_lock:
-
-                print("WAITING")
                 self.avail.setWaiting(fh) # czekamy na cokolwiek, bo i tak preload wypełnia cały plik. fh jest unikalny
         
     def read(self, offset, length, fh):
@@ -266,19 +227,44 @@ class YTStor():
         None
         """
 
-        #r = (offset, offset + length)
+        current = (offset, offset + length)
 
-        #if self.avail.contains(r) < length:
-        #    Downloader.fetch(self, r, fh)
-        #else:
-        #    print("!!!!!!!!!!!!!!!!!!!!!")
+        safe = [ current[0] - ( 8 * length ), current[1] + ( 16 * length ) ]
+        if safe[0] < 0: safe[0] = 0
+        if safe[1] > self.filesize: safe[1] = self.filesize
+        safe = tuple(safe)
 
-        #print(self.avail.toset())
+        need = [ safe[0] - ( 8 * length ), safe[1] + ( 16 * length ) ]
+        if need[0] < 0: need[0] = 0
+        if need[1] > self.filesize: need[1] = self.filesize
+        need = tuple(need)
+
+        ws = range_t()
+        if self.processing_range.contains(need): # zakres, którego potrzebujemy, jakoś pokrywa się z przetwarzanymi.
+
+            ws += self.processing_range - (self.processing_range - need) # można optymalniej, trzeba zaktualizować range_t FIXME
+
+        if current not in self.safe_range: # próba odczytu danych zza safe_range - musimy trochę dociągnąć
+
+            dls = range_t({need}) - self.avail # brakujące zakresy danych.
+            dls -= ws # wywalamy zbiory, na które musimy poczekać, bo zajmuje się nimi ktoś inny.
+
+            self.processing_range += dls
+
+            thread = []
+            for r in dls.toset():
+                thread.append(Thread( target=Downloader.fetch, args=(self, r, fh) )) # zlecamy pobieranie
+                thread[-1].daemon = True
+                thread[-1].start()
+
+            self.avail.setWaiting(need) # czekamy aż to czego potrzebujemy będzie gotowe
+
+            for t in thread:
+                t.join()
+
+            self.safe_range += safe
+
+        # zrobione, można zwrócić dane:
 
         self.data.seek(offset)
         return self.data.read(length) #FIXME - sprawdzanie błędów
-
-    #def clean(self, all_data=False):
-    #    
-    #    """ """
-    #    pass

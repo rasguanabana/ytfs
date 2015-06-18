@@ -67,45 +67,16 @@ class range_t():
         None
         """
 
-        #szukanie "kolizji" i sumowanie podzakresów:
-        pre = deepcopy(self.__has)
-        post = set()
+        ret = []
 
-        while pre:
+        for (begin, end) in sorted(self.__has):
 
-            t = pre.pop()
+            if ret and begin <= ret[-1][1] < end: # jeśli bieżący zakres zachodzi na ostatni z ret
+                ret[-1] = (ret[-1][0], end)
+            elif not ret or begin > ret[-1][1]:
+                ret.append( (begin, end) )
 
-            common = self.__match_l(t, pre).union({t})
-            pre.difference_update(common) #usuwamy użyte podzakresy
-
-            to_add = (min({l[0] for l in common}), max({r[1] for r in common}))
-                            #minimum z lewych krańców, maksimum z prawych
-
-            if self.__match_l(to_add, pre): #jeśli wynik nadal zachodzi na jakieś podzakresy, to wrzucamy go z powrotem.
-                pre.add(to_add)
-            else:
-                post.add(to_add) #w przeciwnym razie dodajemy sumę do wyniku
-
-        #spawanie:
-        d = dict(post) #pomocniczy słownik, którego kluczami są lewe krańce, a wartościami prawe.
-        #l = list(d.keys()) #klucze, po których będziemy iterować
-
-        (ret, used) = (set(), set())
-        for start in d:
-            if start in used: continue #musimy to sprawdzać, bo poniżej pętla while może przeskoczyć kilka kluczy.
-
-            end = start
-            try:
-                while True:
-                    end = d[end] #Magic! Krotki (start, end) zostały zamienione na start: end, zatem, jeśli podzakresy
-                                 #się stykają, to end będzie początkiem innego podzakresu, a więc kluczem w słowniku,
-                                 #pod którym jest koniec, albo kolejny indeks.
-                                 #Pętla wykona się zawsze przynajmniej raz.
-                    used.add(end)
-            except KeyError: #end nie jest kluczem, więc przerywamy while'a.
-                ret.add((start, end))
-
-        self.__has = ret #zapis!
+        self.__has = set(ret)
 
         self.checkWaitings() #sprawdzamy, czy ktoś na nas nie czeka, może pojawiły się nowe zakresy?
 
@@ -246,7 +217,7 @@ class range_t():
         else:
             val = val.toset()
 
-        __has = deepcopy(self.__has) #po prostu dodajemy do zbioru, następnie zwracamy niu abdżekt
+        __has = deepcopy(self.__has) #po prostu dodajemy do zbioru
         __has.update(val)
 
         return __has
@@ -391,6 +362,10 @@ class range_t():
         """
 
         conv = self.__val_convert(val) #konwersja
+
+        if conv in self: return # już jest :)
+
+        print("w")
 
         self.waitings[conv] = Event() # tworzymy zdarzenie i ...
         self.waitings[conv].wait() # ... czekamy

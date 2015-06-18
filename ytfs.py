@@ -281,8 +281,6 @@ class YTFS(Operations):
 
         """Atrybuty pliku."""
 
-        print(">> getattr")
-
         if not self.__exists(tid):
             raise FuseOSError(errno.ENOENT)
 
@@ -308,16 +306,12 @@ class YTFS(Operations):
 
         st['st_blocks'] = math.ceil(st['st_size'] / st['st_blksize'])
 
-        print(tid, st)
-
         return st
 
     @_pathdec
     def readdir(self, tid, fh):
 
         """Listowanie katalogu."""
-
-        print(">> readdir")
 
         ret = []
         pt = self.PathType.get(tid)
@@ -344,8 +338,6 @@ class YTFS(Operations):
 
         """Utworzenie katalogu."""
 
-        print(">> mkdir")
-
         pt = self.PathType.get(tid)
 
         if pt is self.PathType.invalid or pt is self.PathType.file:
@@ -363,8 +355,6 @@ class YTFS(Operations):
     def rmdir(self, tid):
 
         """Usunięcie katalogu."""
-
-        print(">> rmdir")
 
         pt = self.PathType.get(tid)
 
@@ -385,8 +375,6 @@ class YTFS(Operations):
     def open(self, tid, flags):
 
         """Otwarcie pliku."""
-
-        print(">> open")
 
         pt = self.PathType.get(tid)
 
@@ -417,8 +405,6 @@ class YTFS(Operations):
 
         """Odczyt z pliku."""
 
-        print(">> read", offset, length, offset + length)
-
         try:
             return self.fds[fh].read(offset, length, fh)
 
@@ -446,9 +432,6 @@ class YTFS(Operations):
 
         """Zamknięcie pliku (?)"""
 
-        print(">> release")
-        print(self.fds)
-
         try:
             del self.fds[fh].dl_control[fh]
         except (KeyError, AttributeError):
@@ -459,13 +442,11 @@ class YTFS(Operations):
         except KeyError:
             raise FuseOSError(errno.EBADF)
 
-        print(self.fds)
-
         return 0
 
 
 def main(mountpoint, av):
-    FUSE(YTFS(av), mountpoint, foreground=True)
+    FUSE(YTFS(av), mountpoint, foreground=False)
 
 if __name__ == '__main__':
     
