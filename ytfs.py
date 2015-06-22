@@ -75,15 +75,15 @@ class YTFS(Operations):
               ...
           }
         
-        Obiekt YTStor przechowuje wszystkie potrzebne informacje o filmie, nie tylko dane dane multimedialne.
+        Obiekt YTStor przechowuje wszystkie potrzebne informacje o filmie, nie tylko dane multimedialne.
 
         Uwaga: dla uproszczenia rozszerzenia w nazwach plików są obecne wyłącznie podczas wypisywania zawartości
         katalogu. We wszelkich innych operacjach są upuszczane.
     fds : fd_dict
         Słownik fd_dict wiążący będące w użyciu deskryptory z obiektami YTStor.
-        Klucz: deskryptor
+        Klucz: deskryptor;
         Wartość: obiekt YTStor dla danego pliku.
-    __sh_script : str
+    __sh_script : bytes
         Zawartość zwracana przy odczycie pliku sterującego (pusty skrypt). System ma mieć wrażenie, że coś wykonał.
         Faktyczną operacją zajmuje się sam YTFS podczas otwarcia pliku sterującego.
     """
@@ -265,9 +265,21 @@ class YTFS(Operations):
 
     def _pathdec(method):
 
-        """Dekorator podmieniający argument path z reprezentacji tekstowej na identyfikator krotkowy."""
+        """
+        Dekorator podmieniający argument path z reprezentacji tekstowej na identyfikator krotkowy.
 
-        @wraps(method)
+        Parameters
+        ----------
+        method : function
+            Funkcja/metoda do udekorowania.
+
+        Returns
+        -------
+        mod : function
+            Funckja/metoda po dekoracji.
+        """
+
+        @wraps(method) # functools.wraps umożliwia poprawną autogenerację dokumentacji dla udekorowanych funkcji.
         def mod(self, path, *args):
 
             try:

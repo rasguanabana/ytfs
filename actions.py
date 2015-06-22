@@ -155,6 +155,8 @@ class YTActions():
             Nazwa pliku.
         """
 
+        arg = os.path.splitext(arg)[0]
+
         return arg in self.visible_files or (self.adj_tokens[0] is not None and arg == " prev") or (self.adj_tokens[0] is None and self.adj_tokens[1] is not None and arg == " next")
 
     def updateResults(self, forward=None):

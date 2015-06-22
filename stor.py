@@ -34,6 +34,8 @@ class Downloader():
             Obiekt YTStor, do którego będziemy pisać
         needed_range : tuple
             Dwuelementowa krotka oznaczająca zakres danych (start, end). Przedział jest lewostronnie domknięty.
+        fh : int
+            Deskryptor, którego proces używa do operacji na pliku.
         
         Returns
         -------
