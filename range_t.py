@@ -1,3 +1,7 @@
+"""
+Moduł dostarczający klasę range_t, która umożliwia prosty i kompaktowy zapis zbiorów liczbowych.
+"""
+
 from copy import deepcopy
 from threading import Event
 
@@ -10,14 +14,14 @@ class range_t():
 
     Attributes
     ----------
-    __has: set
+    __has : set
         Zbiór podzakresów.
-    waitings: dict
+    waitings : dict
         Słownik zakresów, na które mogą oczekiwać wątki. Kluczem jest zakres, wartością obiekt threading.Event
 
     Parameters
     ----------
-    initset: set, optional
+    initset : set, optional
         Początkowy zbiór składowych podzakresów. Domyślnie pusty.
     """
 
@@ -36,25 +40,25 @@ class range_t():
         self.__has = initset
         self.__optimize()
 
-    def __match_l(self, k, set_):
+    def __match_l(self, k, _set):
 
         """
-        Metoda szukająca zachodzących na k podzakresów ze zbioru set_.
+        Metoda szukająca zachodzących na k podzakresów ze zbioru _set.
 
         Parameters
         ----------
-        k: tuple or list or range
-            Zakres, dla którego sprawdzamy nachodzące podzakresy z set_.
-        set_: set
+        k : tuple or list or range
+            Zakres, dla którego sprawdzamy nachodzące podzakresy z _set.
+        _set : set
             Zbiór podzakresów.
 
         Returns
         -------
-        matched: set
-            Zbiór podzakresów ze zbioru set_ zachodzących na k.
+        matched : set
+            Zbiór podzakresów ze zbioru _set zachodzących na k.
         """
 
-        return {r for r in set_ if k[0] in range(*r) or k[1] in range(*r) or (k[0] < r[0] and k[1] >= r[1])}
+        return {r for r in _set if k[0] in range(*r) or k[1] in range(*r) or (k[0] < r[0] and k[1] >= r[1])}
                                    #k częściowo lub w całości w r            #r zawiera się w całości w k
     def __optimize(self):
 
@@ -65,6 +69,7 @@ class range_t():
         Returns
         -------
         None
+            Metoda nie zwraca. Operuje na ukrytym atrybucie self.__has.
         """
 
         ret = []
@@ -87,12 +92,12 @@ class range_t():
 
         Parameters
         ----------
-        val: int or tuple or list or range
+        val : int or tuple or list or range
             Dwuelementowy obiekt przedstawiający zakres lub liczba całkowita.
 
         Returns
         -------
-        converted: tuple
+        converted : tuple
             Krotka reprezentująca zakres.
         """
 
@@ -123,12 +128,12 @@ class range_t():
 
         Parameters
         ----------
-        val: int or tuple or list or range
+        val : int or tuple or list or range
             Badany zakres lub liczba całkowita.
 
         Returns
         -------
-        retlen: int
+        retlen : int
             Długość pokrywających się z val obszarów.
         """
 
@@ -148,7 +153,7 @@ class range_t():
 
         Parameters
         ----------
-        val: int or tuple or list or range
+        val : int or tuple or list or range
             Badany zakres lub liczba całkowita.
 
         Returns
@@ -167,7 +172,7 @@ class range_t():
 
         Parameters
         ----------
-        val: int or tuple or list or range
+        val : int or tuple or list or range
             Badany zakres lub liczba całkowita.
 
         Returns
@@ -183,7 +188,7 @@ class range_t():
     def toset(self):
 
         """
-        Konwersja obiektu na zbiór podzakresów
+        Konwersja obiektu na zbiór podzakresów.
 
         Returns
         -------
@@ -201,12 +206,12 @@ class range_t():
 
         Parameters
         ----------
-        val: int or tuple or list or range
+        val : int or tuple or list or range
             Liczba całkowita lub zakres przeznaczony do dodania.
 
         Returns
         -------
-        __has: set
+        __has : set
             Zbiór self.__has poszerzony o nowy przedział.
         """
 
@@ -229,7 +234,7 @@ class range_t():
 
         Parameters
         ----------
-        val: int or tuple or list or range
+        val : int or tuple or list or range
             Liczba całkowita lub zakres przeznaczony do dodania.
 
         Returns
@@ -247,12 +252,12 @@ class range_t():
 
         Parameters
         ----------
-        val: int or tuple or list or range
+        val : int or tuple or list or range
             Liczba całkowita lub zakres przeznaczony do dodania.
 
         Returns
         -------
-        self: range_t
+        self : range_t
             Zwracany jest bieżący obiekt poszerzony o val.
         """
 
@@ -268,7 +273,7 @@ class range_t():
         
         Parameters
         ----------
-        val: int or tuple or list or range
+        val : int or tuple or list or range
             Liczba całkowita lub zakres przeznaczony do odjęcia.
 
         Returns
@@ -306,7 +311,7 @@ class range_t():
 
         Returns
         -------
-        ret: int
+        ret : int
             Suma długości posiadanych podzakresów.
         """
 
@@ -323,7 +328,7 @@ class range_t():
 
         Parameters
         ----------
-        val: range_t
+        val : range_t
             Obiekt range_t do porównania.
 
         Returns
@@ -357,15 +362,13 @@ class range_t():
 
         Parameters
         ----------
-        val: int or tuple or list or range
+        val : int or tuple or list or range
             Liczba całkowita lub zakres, na który chcemy zaczekać
         """
 
         conv = self.__val_convert(val) #konwersja
 
         if conv in self: return # już jest :)
-
-        print("w")
 
         self.waitings[conv] = Event() # tworzymy zdarzenie i ...
         self.waitings[conv].wait() # ... czekamy

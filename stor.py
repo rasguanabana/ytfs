@@ -1,3 +1,8 @@
+"""
+Moduł odpowiedzialny za pobieranie danych multimedialnych z serwisów internetowych. Na chwilę obecną wspierany jest
+tylko YouTube.
+"""
+
 import os
 import youtube_dl
 import requests
@@ -10,7 +15,8 @@ from range_t import range_t
 class Downloader():
 
     """
-    Klasa odpowiedzialna za pobieranie danych
+    Klasa odpowiedzialna za pobieranie danych. Może z niej korzystać każdy obiekt podobny do YTStor (na chwilę obecną
+    nie istnieją żadne inne obiekty zdolne do używania Downloadera).
     """
 
     class FetchError(Exception):
@@ -34,8 +40,6 @@ class Downloader():
         None
             Metoda niczego nie zwraca; dane są bezpośrednio wpisywane do obiektu YTStor.
         """
-
-        print(".")
 
         if yts.SET_AV == YTStor.DL_AUD | YTStor.DL_VID:
 
@@ -84,32 +88,49 @@ class YTStor():
 
     Attributes
     ----------
-    data: SpooledTemporaryFile
+    data : SpooledTemporaryFile
         Obiekt pliku tymczasowego, który przechowuje pobrane dane.
-    dl_control: DlControl
-        Obiekt zawierający zmienne sterujące dla Downloaderów (osobne zestawy dla różnych deskryptorów).
-    avail: range_t
+    global_dl_lock : bool
+        Globalna blokada pobierania. Używana, gdy ustawione jest pobieranie audio i wideo, ze względu na potrzebę
+        pobrania całości danych naraz.
+    thread : list
+        Lista uruchomionych wątków Downloadera.
+    avail : range_t
         Obiekt mówiący o tym ile danych posiadamy.
-    r_session: requests.Session
-        Obiekt trzymający sesję HTTP.
-    yid: str
-        Identyfikator wideo YouTube.
-    info: dict
-        ... #FIXME
+    safe_range : range_t
+        Zbiór zawierający się w avail. Zawiera obszary danych, których odczyt nie spowoduje przejścia programu w stan
+        oczekiwania.
+    processing_range : range_t
+        Zbiór aktualnie przetwarzanych danych. Dzięki temu dany wątek może sprawdzić, czy dane które chce pobrać, nie
+        są pobierane przez inny wątek.
+    filesize : int
+        Całkowita ilość danych (także tych niepobranych).
+    r_session : requests.Session
+        Obiekt trzymający sesję HTTP. Dzięki temu unikamy zbędnych negocjacji rozmiaru okna TCP za każdym razem, gdy
+        pobieramy dane.
+    yid : str
+        Identyfikator wideo YouTube, którego dotyczy ten obiekt.
+    info : dict
+        Słownik zawierający informacje o pobieranych danych. Dokładnie jest to słownik znajdujący się pod kluczem
+        'requested_formats' w wyniku funkcji YoutubeDL.extract_info.
+
+    DL_VID : int
+        Stała, której wpisanie do SET_AV poinstruuje obiekt do pobierania danych wideo.
+    DL_AUD : int
+        Stała, której wpisanie do SET_AV poinstruuje obiekt do pobierania danych audio.
+    SET_AV : int
+        Atrybut przechowujący informację o tym jakie dane ma pobierać obiekt. Może się składać z kombinacji DL_VID
+        i DL_AUD.
 
     Parameters
     ----------
-    yid: str
+    yid : str
         Identyfikator wideo YouTube.
     """
 
     DL_VID = 0b10
     DL_AUD = 0b01
     SET_AV = 0b11
-
-    class DlControl():
-        idle = True
-        abort = False
 
     @staticmethod
     def _setDownloadManner(av):
@@ -119,7 +140,7 @@ class YTStor():
 
         Parameters
         ----------
-        av: int
+        av : int
             Liczba dwubitowa, której bity mówią o tym co pobieramy. Pierwszy bit odpowiada za audio, drugi za wideo.
             Do przypisania wartości można użyć wartości YTStor.DL_AUD oraz YTStor.DL_VID. Uwaga: jeśli zaznaczono
             pobieranie audio i wideo, wówczas pobieranie i łączenie dokonuje się podczas wywołania open, w przeciwnym
@@ -139,38 +160,33 @@ class YTStor():
             raise ValueError("yid expected to be valid Youtube movie identifier")
 
         self.data = tempfile.SpooledTemporaryFile()
-        self.dl_control = dict()
         self.global_dl_lock = False
+        self.thread = []
 
         self.avail = range_t()
         self.safe_range = range_t()
         self.processing_range = range_t()
+        self.spooled = 1;
 
         self.filesize = 4096
 
         self.r_session = requests.Session()
 
         self.yid = yid
-        self.ytdl = youtube_dl.YoutubeDL({"quiet": True})
+        self.ytdl = youtube_dl.YoutubeDL({"quiet": True, "formats": "bestvideo+bestaudio"})
         self.ytdl.add_info_extractor( self.ytdl.get_info_extractor("Youtube") )
 
     def obtainInfo(self):
 
         """
-        Metoda pozyskująca informacje o filmie
-        
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-            Metoda nie zwraca, natomiast w razie niepowodzenia może rzucać wyjątki.
+        Metoda pozyskująca informacje o filmie.
         """
 
         self.info = self.ytdl.extract_info(self.yid, download=False)['requested_formats']
-        self.filesize = self.info[2 - self.SET_AV]['filesize']
+        try:
+            self.filesize = self.info[2 - self.SET_AV]['filesize']
+        except (KeyError, IndexError):
+            pass
 
         return True #FIXME
     
@@ -181,15 +197,9 @@ class YTStor():
 
         Parameters
         ----------
-        fh: int
+        fh : int
             Deskryptor pliku.
-
-        Returns
-        -------
-        None
         """
-
-        self.dl_control[fh] = YTStor.DlControl()
 
         if (0, self.filesize) not in self.avail and self.SET_AV == YTStor.DL_AUD | YTStor.DL_VID:
 
@@ -211,20 +221,16 @@ class YTStor():
     def read(self, offset, length, fh):
 
         """
-        Odczytaj dane. Metoda zwraca dane natychmiast, jeśli są dostępne, lub, w razie potrzeby, pobiera je.
+        Odczytaj dane. Metoda zwraca dane natychmiast, jeśli są dostępne, lub - w razie potrzeby - pobiera je.
 
         Parameters
         ----------
-        start: int
+        start : int
             Lewy kraniec żądanego zakresu.
-        end: int
+        end : int
             Prawy kraniec żądanego zakresu.
-        fh: int
+        fh : int
             Deskryptor pliku.
-
-        Returns
-        -------
-        None
         """
 
         current = (offset, offset + length)
@@ -251,20 +257,33 @@ class YTStor():
 
             self.processing_range += dls
 
-            thread = []
             for r in dls.toset():
-                thread.append(Thread( target=Downloader.fetch, args=(self, r, fh) )) # zlecamy pobieranie
-                thread[-1].daemon = True
-                thread[-1].start()
+                _t = Thread( target=Downloader.fetch, args=(self, r, fh) ) # zlecamy pobieranie
+                _t.daemon = True
+                _t.start()
+                self.thread.append(_t)
 
             self.avail.setWaiting(need) # czekamy aż to czego potrzebujemy będzie gotowe
 
-            for t in thread:
-                t.join()
-
             self.safe_range += safe
+
+            #if offset > self.spooled * 2 * 1024**2: # zapisujemy dane na dysk
+            #    self.data.rollover()
+            #    self.spooled += 1
 
         # zrobione, można zwrócić dane:
 
         self.data.seek(offset)
         return self.data.read(length) #FIXME - sprawdzanie błędów
+
+    def clean(self):
+
+        """
+        Wyczyść dane. Jawnie zamykamy self.data. Dodatkowo wykonujemy join() na uruchomionych wcześniej wątkach.
+        """
+
+        self.data.close()
+
+        for t in self.thread:
+            t.join(1)
+
