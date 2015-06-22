@@ -173,7 +173,7 @@ class YTStor():
         self.r_session = requests.Session()
 
         self.yid = yid
-        self.ytdl = youtube_dl.YoutubeDL({"quiet": True, "formats": "bestvideo+bestaudio"})
+        self.ytdl = youtube_dl.YoutubeDL({"quiet": True, "format": "bestvideo+bestaudio"})
         self.ytdl.add_info_extractor( self.ytdl.get_info_extractor("Youtube") )
 
     def obtainInfo(self):
