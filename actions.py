@@ -1,5 +1,5 @@
 """
-Moduł odpowiedzialny za wyszukiwanie filmów w serwisach internetowych. Na chwilę obecną wspierany jest tylko YouTube.
+Module responsible for searching movies in Internet services. As for now only YouTube is supported.
 """
 
 import os
@@ -13,36 +13,35 @@ from collections import OrderedDict
 class YTActions():
 
     """
-    Klasa pozwalająca na realizowanie operacji wyszukiwania filmów w serwisie YouTube oraz przechowująca informacje o
-    wynikach wyszukiwania.
+    Class responsible for searching in YouTube service and holding information about search results.
 
     Attributes
     ----------
     avail_files : OrderedDict
-        Zawiera krotki następującej postaci:
+        Contains tuples of following format:
 
         avail_files = {
-                        "token": (adj_tokens, files),
+                        "token": (`adj_tokens`, `files`),
                         ...
                     }
                                                                         
-        adj_tokens to sąsiednie tokeny, files to pliki danego wyszukiwania
-        (tak jak poniżej).
+        `adj_tokens` contains adjacent tokens, `files` contains files of given search.
+        (just as described below).
     visible_files : dict
-        Bieżące wyniki wyszukiwania. Kluczem jest nazwa filmu, a wartością obiekt YTStor dla filmu.
+        Current search results. Key is a movie name, value is a ``YTStor`` object for given movie.
     adj_tokens : dict
-        Słownik tokenów sąsiednich stron wyszukiwania. Pod False znajduje się poprzednia strona, pod True - następna.
-        Inne klucze nie są dozwolone.
+        Dictionary of tokens for adjacent search pages. Under ``False`` key the previous page is kept, under ``True`` -
+        the next. Other keys are not allowed.
     vf_iter : obj
-        Tu klasa przechowuje iterator pozwalający na listowanie bieżącej zawartości katalogu. Używane przez __iter__
-        i __next__.
+        Here the ``YTActions`` obejct stores an iterator allowing for current directory content listing. Used by
+        ``__iter__`` and ``__next__`` methods.
 
     Parameters
     ----------
     search_query : str
-        Fraza, wg której wyszukiwane są filmy.
+        Currently used search phrase.
     max_results : int, optional
-        Ilość wyszukiwań na "stronę".
+        Number of results for a single "page".
     """
 
     avail_files = OrderedDict()
@@ -64,17 +63,17 @@ class YTActions():
     def __search(self, pt=None):
 
         """
-        Metoda odpowiedzialna za wyszukiwanie w API YouTube.
+        Method responsible for searching using YouTube API.
 
         Parameters
         ----------
         pt : str
-            Token strony z wynikami wyszukiwania. Jeśli None, to pobierana jest pierwsza strona.
+            Token of search results page. If ``None``, then the first page is downloaded.
 
         Returns
         -------
         results : dict
-            Sparsowany json zwrócony z API YouTube.
+            Parsed JSON returned by YouTube API.
         """
 
         api_fixed_url = "https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&fields=items(id%2Ckind%2Csnippet)%2CnextPageToken%2CprevPageToken"
@@ -87,18 +86,18 @@ class YTActions():
         except TypeError:
             pass
 
-        return requests.get(url).json() #FIXME? trochę gołe, a coś może pójść nie tak...
+        return requests.get(url).json() #FIXME? something can go wrong here...
 
     def __iter__(self):
 
         """
-        Stwórz iterator. Metoda umożliwia w prosty sposób zwrócić generator zawierający nazwy plików. Faktycznym
-        generatorem jest self.vf_iter, obiekt YTActions (użyty jako iterator) stanowi do niego nakładkę.
+        Create an iterator. Method allows - in a simple manner - for obtaining a generator which contains filenames.
+        The real generator is ``self.vf_iter``; YTActions object (used as iterator) is only a wrapper.
 
         Returns
         -------
         self : YTActions
-            Obiekt, potraktowany funkcją iter(), zwraca sam siebie. 
+            This very same object with ``self.vf_iter`` constructed and initialised.
         """
 
         ctrl = []
@@ -115,31 +114,30 @@ class YTActions():
     def __next__(self):
 
         """
-        Obsługa next(). Zwróć następną nazwę pliku.
+        ``next()`` support. Returns next filename.
 
         Returns
         -------
         file_name : str
-            Następna nazwa pliku z self.vf_iter.
+            Next filename from ``self.vf_iter.``
         """
 
-        return next(self.vf_iter)
+        return next(self.vf_iter) #easy, ain't it?
 
     def __getitem__(self, key):
 
         """
-        Odczytuj elementy z obiektu YTActions za pomocą klucza `key`. Metoda pozwala na używanie obiektu w podobny
-        sposób jak słownika.
+        Read elements from ``YTActions`` object by using `key`. One can use object like a dict (and like a boss, ofc).
 
         Parameters
         ----------
         key : str
-            Klucz (np. YTActions['Rick Astley - Never Gonna Give You Up.mp4']).
+            The key (e.g. ``YTActions['Rick Astley - Never Gonna Give You Up.mp4']``).
 
         Returns
         -------
         YTStor
-            Obiekt YTStor skojarzony z nazwą `key`.
+            ``YTStor`` object associated with name `key`.
         """
 
         return self.visible_files[ os.path.splitext(key)[0] ] #pozbywamy się rozszerzenia, btw.
@@ -147,12 +145,12 @@ class YTActions():
     def __in__(self, arg):
 
         """
-        Sprawdź, czy film o nazwie `arg` znajduje się w obiekcie.
+        Check, if movie of name `arg` is present in the object.
 
         Parameters
         ----------
         arg : str
-            Nazwa pliku.
+            Filename.
         """
 
         arg = os.path.splitext(arg)[0]
@@ -162,45 +160,45 @@ class YTActions():
     def updateResults(self, forward=None):
 
         """
-        Odśwież wyniki wyszukiwania lub przejdź na inną ich "stronę".
+        Reload search results or load another "page".
 
         Parameters
         ----------
         forward : bool or None, optional
-            Czy poruszać się do przodu (True lub False). Jeśli None, to pobierana jest pierwsza strona wyszukiwania.
+            Whether move forwards or backwards (``True`` or ``False``). If ``None``, then first page is loaded.
         """
 
-        # to wybiera potrzebne nam dane
+        # this choses data we need.
         files = lambda x: {i['snippet']['title'].replace('/', '\\'): YTStor(i['id']['videoId']) for i in x['items']}
 
         try:
-            if self.adj_tokens[forward] is None: #na wypadek, gdyby ktoś jakimś cudem chciał przekroczyć granicę
+            if self.adj_tokens[forward] is None: # in case someone would somehow cross boundary.
                 forward = None
         except KeyError:
             pass
 
         try:
             try:
-                data = self.avail_files[ self.adj_tokens[forward] ] #może dane są już dostępne lokalnie.
+                data = self.avail_files[ self.adj_tokens[forward] ] # maybe data is already available locally.
             except KeyError:
-                recv = self.__search( self.adj_tokens[forward] ) #ni ma, szukamy
-                data = (None, files(recv)) #ujednolicamy format, trochę.
+                recv = self.__search( self.adj_tokens[forward] ) # nope, we have to search.
+                data = (None, files(recv)) # little format unification.
                                                                                                  
-        except KeyError: #nie siadł indeks w adj_tokens
+        except KeyError: # wrong index in adj_tokens
 
             if forward is None:
                 recv = self.__search()
-                data = (None, files(recv)) #też
+                data = (None, files(recv)) # same here
             else:
                 raise ValueError("Valid values for forward are True, False or None (default).")
 
         if len(self.avail_files) > 4:
-            pop = self.avail_files.popitem(False) #wyrzucamy najstarsze dane
+            pop = self.avail_files.popitem(False) # get rid of the oldest data.
             for s in pop.values(): s.clean()
 
-        adj_t = deepcopy(self.adj_tokens) # to zaraz wpiszemy do avail_files, teraz uaktualniamy self.adj_tokens.
+        adj_t = deepcopy(self.adj_tokens) # this will we write to avail_files, now we update self.adj_tokens.
 
-        if data[0] is None: #bierzemy tokeny z pobranych wyników.
+        if data[0] is None: # get tokens from obtained results.
             try:
                 self.adj_tokens[False] = recv['prevPageToken']
             except KeyError:
@@ -211,20 +209,20 @@ class YTActions():
             except KeyError:
                 self.adj_tokens[True] = None
 
-        else: #mamy z avail_files.
+        else: # already in avail_files.
             self.adj_tokens = data[0]
 
         if forward is not None:
-            #wrzucamy ostatnie wyniki do avail_files:
+            # backup last results in avail_files:
             self.avail_files[ self.adj_tokens[not forward] ] = (adj_t, self.visible_files)
 
         self.visible_files = data[1]
 
     def clean(self):
 
-        """Wyczyść dane. Dla każdego obiektu YTStor zawartego w tym obiekcie wykonywana jest metoda clean."""
+        """Clear the data. For each ``YTStor`` object present in this object ``clean`` method is executed."""
 
         for s in self.visible_files.values():
             s.clean()
-        for s in [sub[x] for sub in self.avail_files.values() for x in sub]: # podwójne wyrażenia listowe są jednak
-            s.clean()                                                        # średnio czytelne...
+        for s in [sub[x] for sub in self.avail_files.values() for x in sub]: # Double list comprehensions aren't very
+            s.clean()                                                        # readable...

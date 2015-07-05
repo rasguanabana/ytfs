@@ -1,6 +1,5 @@
 """
-Moduł odpowiedzialny za pobieranie danych multimedialnych z serwisów internetowych. Na chwilę obecną wspierany jest
-tylko YouTube.
+Module responsible for downloading multimedia from Internet services. As for now only YouTube is supported.
 """
 
 import os
@@ -15,8 +14,8 @@ from range_t import range_t
 class Downloader():
 
     """
-    Klasa odpowiedzialna za pobieranie danych. Może z niej korzystać każdy obiekt podobny do YTStor (na chwilę obecną
-    nie istnieją żadne inne obiekty zdolne do używania Downloadera).
+    Class responsible for data downloading. Every object similiar to ``YTStor`` can use it. (Currently no class, other
+    than aforementioned ``YTStor``, is capable of using ``Downloader``).
     """
 
     class FetchError(Exception):
@@ -26,33 +25,33 @@ class Downloader():
     def fetch(yts, needed_range, fh):
 
         """
-        Pobierz żądany zakres danych i umieść je w obiekcie YTStor.
+        Download desired range of data and put it in `yts` object (e.g. ``YTStor``).
 
         Parameters
         ----------
         yts : YTStor
-            Obiekt YTStor, do którego będziemy pisać
+            Stor-like object to which we will write.
         needed_range : tuple
-            Dwuelementowa krotka oznaczająca zakres danych (start, end). Przedział jest lewostronnie domknięty.
+            Two element tuple that represents a data range - compliant with ``range_t`` subrange definition.
         fh : int
-            Deskryptor, którego proces używa do operacji na pliku.
+            Descriptor used by a process for filesystem operations.
         
         Returns
         -------
         None
-            Metoda niczego nie zwraca; dane są bezpośrednio wpisywane do obiektu YTStor.
+            Method does not return; data is written directly to `yts` object.
         """
 
         if yts.SET_AV == YTStor.DL_AUD | YTStor.DL_VID:
 
             with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as d, tempfile.NamedTemporaryFile(prefix='a') as a, tempfile.NamedTemporaryFile(prefix='v') as v:
-                # po opuszczeniu with pliki zostaną usunięte
+                # after with statement, files - save d - shall be removed
 
-                v.write(yts.r_session.get(yts.info[0]['url']).content) #pobieramy wideo
-                a.write(yts.r_session.get(yts.info[1]['url']).content) #pobieramy audio
+                v.write(yts.r_session.get(yts.info[0]['url']).content) # download video
+                a.write(yts.r_session.get(yts.info[1]['url']).content) # download audio
 
                 PP = youtube_dl.postprocessor.FFmpegMergerPP(yts.ytdl)
-                PP.run({'filepath': d.name, '__files_to_merge': (v.name, a.name)}) #łączymy
+                PP.run({'filepath': d.name, '__files_to_merge': (v.name, a.name)}) # merge
 
                 _d = d.name
 
@@ -71,9 +70,9 @@ class Downloader():
             hr = (needed_range[0], needed_range[1] - 1)
 
             get = yts.r_session.get(yts.info[2 - yts.SET_AV]['url'], headers={'Range': 'bytes=' + '-'.join(str(i) for i in hr)})
-            yts.data.seek(hr[0])
+            yts.data.seek(hr[0])            #SET_AV equals 2 or 1
             yts.data.write(get.content)
-            yts.data.flush()                            #SET_AV równa się 2 lub 1
+            yts.data.flush()
 
             ret = list( int(s) for s in get.headers.get('content-range').split(' ')[1].split('/')[0].split('-') )
             ret[1] += 1
@@ -87,47 +86,49 @@ class YTStor():
     """
     YTStor - serce YTFS. Klasa odpowiedzialna za zdobywanie i przechowywanie danych oraz informacji o filmie o podanym
     identyfikatorze.
+    ``YTStor`` - the heart of YTFS. Class responsible for obtaining and storing data and information about a movie of
+    given id.
 
     Attributes
     ----------
     data : SpooledTemporaryFile
-        Obiekt pliku tymczasowego, który przechowuje pobrane dane.
+        Temporary file object - actual data is stored here.
     global_dl_lock : bool
-        Globalna blokada pobierania. Używana, gdy ustawione jest pobieranie audio i wideo, ze względu na potrzebę
-        pobrania całości danych naraz.
+        Global download lock. Used when merge of audio and video is needed because all data has to be downloaded
+        at once.
     thread : list
-        Lista uruchomionych wątków Downloadera.
+        List of running ``Downloader`` threads.
     avail : range_t
-        Obiekt mówiący o tym ile danych posiadamy.
+        Object saying how much data we have.
     safe_range : range_t
-        Zbiór zawierający się w avail. Zawiera obszary danych, których odczyt nie spowoduje przejścia programu w stan
-        oczekiwania.
+        Range contained in ``avail``. It constitutes these data ranges, whose read won't cause reading process to wait
+        for download of new data.
     processing_range : range_t
-        Zbiór aktualnie przetwarzanych danych. Dzięki temu dany wątek może sprawdzić, czy dane które chce pobrać, nie
-        są pobierane przez inny wątek.
+        Range of data being currently processed. Thanks to that, given thread can check if data, which it want to
+        download, isn't already being downloaded by another thread.
     filesize : int
-        Całkowita ilość danych (także tych niepobranych).
+        Total data size. Not yet downloaded data is also considered.
     r_session : requests.Session
-        Obiekt trzymający sesję HTTP. Dzięki temu unikamy zbędnych negocjacji rozmiaru okna TCP za każdym razem, gdy
-        pobieramy dane.
+        Object that holds HTTP session. Thanks to that, we avoid useless TCP window size negotiations whenever we
+        start a download.
     yid : str
-        Identyfikator wideo YouTube, którego dotyczy ten obiekt.
+        YouTube id of a video which this object represents.
     info : dict
-        Słownik zawierający informacje o pobieranych danych. Dokładnie jest to słownik znajdujący się pod kluczem
-        'requested_formats' w wyniku funkcji YoutubeDL.extract_info.
+        A dictionary wich contains info about movie data being downloaded. More precisely, it is a dict one can find
+        under ``'requested_formats'`` key in ``YoutubeDL.extract_info`` function result.
 
     DL_VID : int
-        Stała, której wpisanie do SET_AV poinstruuje obiekt do pobierania danych wideo.
+        Constant, which written to SET_AV, will instruct object to download video data.
     DL_AUD : int
-        Stała, której wpisanie do SET_AV poinstruuje obiekt do pobierania danych audio.
+        Constant, which written to SET_AV, will instruct object to download audio data.
     SET_AV : int
-        Atrybut przechowujący informację o tym jakie dane ma pobierać obiekt. Może się składać z kombinacji DL_VID
-        i DL_AUD.
+        Attribute wich stores information about what kind of data object will download. It consists of combination of
+        DL_VID and DL_AUD.
 
     Parameters
     ----------
     yid : str
-        Identyfikator wideo YouTube.
+        YouTube video id.
     """
 
     DL_VID = 0b10
@@ -138,28 +139,28 @@ class YTStor():
     def _setDownloadManner(av):
 
         """
-        Metoda statyczna ustawiająca atrybut mówiący downloaderowi co ma pobierać.
+        Static method that sets the attibute which instructs ``Downloader`` what it will download (``SET_AV``).
 
         Parameters
         ----------
         av : int
-            Liczba dwubitowa, której bity mówią o tym co pobieramy. Pierwszy bit odpowiada za audio, drugi za wideo.
-            Do przypisania wartości można użyć wartości YTStor.DL_AUD oraz YTStor.DL_VID. Uwaga: jeśli zaznaczono
-            pobieranie audio i wideo, wówczas pobieranie i łączenie dokonuje się podczas wywołania open, w przeciwnym
-            razie audio/wideo są pobierane dynamicznie (TODO).
+            Two bit number, whose bits tells what ``Downloader`` shall download. The first bit is responsible for
+            audio, the second bit for video. For value assignment ``YTStor.DL_AUD`` and ``YTStor.DL_VID`` constants are
+            used.  Attention: when audio and video data download is selected, then download and merge are performed
+            during ``open`` system call. Otherwise, audio/video data is downloaded dynamically on ``read``.
         """
 
         if not (isinstance(av, int) and 0 <= av <= 3):
             raise ValueError("av needs to be combination of YTStor.DL_AUD and YTStor.DL_VID");
 
-        if av == 0: av = YTStor.DL_AUD #domyślnie pobieramy audio
+        if av == 0: av = YTStor.DL_AUD # audio downloading is default.
 
         YTStor.SET_AV = av
 
     def __init__(self, yid):
 
         if not isinstance(yid, str) or len(yid) != 11:
-            raise ValueError("yid expected to be valid Youtube movie identifier")
+            raise ValueError("yid expected to be valid Youtube movie identifier") #FIXME
 
         self.data = tempfile.SpooledTemporaryFile()
         self.global_dl_lock = False
@@ -181,7 +182,7 @@ class YTStor():
     def obtainInfo(self):
 
         """
-        Metoda pozyskująca informacje o filmie.
+        Method for obtaining information about the movie.
         """
 
         self.info = self.ytdl.extract_info(self.yid, download=False)['requested_formats']
@@ -192,10 +193,10 @@ class YTStor():
 
         return True #FIXME
     
-    def registerHandler(self, fh):
+    def registerHandler(self, fh): # Do I even need that? possible FIXME.
 
         """
-        Zarejestruj nowy deskryptor.
+        Regidter new file descriptor.
 
         Parameters
         ----------
@@ -218,21 +219,22 @@ class YTStor():
                 self.global_dl_lock = False
 
             elif self.global_dl_lock:
-                self.avail.setWaiting(fh) # czekamy na cokolwiek, bo i tak preload wypełnia cały plik. fh jest unikalny
+                self.avail.setWaiting(fh) # wait for anything, beacause all data is downloaded at once. fh is unique.
         
     def read(self, offset, length, fh):
 
         """
-        Odczytaj dane. Metoda zwraca dane natychmiast, jeśli są dostępne, lub - w razie potrzeby - pobiera je.
+        Read data. Method returns data instantly, if they're avaialable and in ``self.safe_range``. Otherwise data is
+        downloaded and then returned.
 
         Parameters
         ----------
         start : int
-            Lewy kraniec żądanego zakresu.
+            Left boundary of desired data range.
         end : int
-            Prawy kraniec żądanego zakresu.
+            Right boundary of desired data range.
         fh : int
-            Deskryptor pliku.
+            File descriptor.
         """
 
         current = (offset, offset + length)
@@ -248,24 +250,24 @@ class YTStor():
         need = tuple(need)
 
         ws = range_t()
-        if self.processing_range.contains(need): # zakres, którego potrzebujemy, jakoś pokrywa się z przetwarzanymi.
+        if self.processing_range.contains(need): # needed range overlaps with currently processed.
 
-            ws += self.processing_range - (self.processing_range - need) # można optymalniej, trzeba zaktualizować range_t FIXME
+            ws += self.processing_range - (self.processing_range - need) # to make that simplier, range_t should be updated FIXME
 
-        if current not in self.safe_range: # próba odczytu danych zza safe_range - musimy trochę dociągnąć
+        if current not in self.safe_range: # data is read outside of ``self.safe_range`` - we have to download a bit.
 
-            dls = range_t({need}) - self.avail # brakujące zakresy danych.
-            dls -= ws # wywalamy zbiory, na które musimy poczekać, bo zajmuje się nimi ktoś inny.
+            dls = range_t({need}) - self.avail # missing data range.
+            dls -= ws # we substract ranges, that we wait for, because somebody else takes care of them.
 
             self.processing_range += dls
 
             for r in dls.toset():
-                _t = Thread( target=Downloader.fetch, args=(self, r, fh) ) # zlecamy pobieranie
+                _t = Thread( target=Downloader.fetch, args=(self, r, fh) ) # download
                 _t.daemon = True
                 _t.start()
                 self.thread.append(_t)
 
-            self.avail.setWaiting(need) # czekamy aż to czego potrzebujemy będzie gotowe
+            self.avail.setWaiting(need) # wait for data we need to be ready.
 
             self.safe_range += safe
 
@@ -273,19 +275,19 @@ class YTStor():
             #    self.data.rollover()
             #    self.spooled += 1
 
-        # zrobione, można zwrócić dane:
+        # done, we can return data:
 
         self.data.seek(offset)
-        return self.data.read(length) #FIXME - sprawdzanie błędów
+        return self.data.read(length) #FIXME - error handling
 
     def clean(self):
 
         """
-        Wyczyść dane. Jawnie zamykamy self.data. Dodatkowo wykonujemy join() na uruchomionych wcześniej wątkach.
+        Clear data. Explicitly close ``self.data``. Additionaly, call join() on threads started earlier.
         """
 
         self.data.close()
 
         for t in self.thread:
             t.join(1)
-
+        #TODO mark object as unusable.

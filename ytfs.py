@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 """
-Główny moduł YTFS. Uruchomienie modułu powoduje zamontowanie systemu plików YTFS w zadanym katalogu.
+Main module of YTFS. Executing this module causes YTFS filesystem mount in given directory.
 """
 
 import os
@@ -22,23 +22,23 @@ from actions import YTActions, YTStor
 
 class fd_dict(dict):
 
-    """Rozszerzenie słownika, które znajduje najniższy niewykorzystany deskryptor i wpisuje podeń obiekt YTStor."""
+    """``dict`` extension, which finds the lowest unused descriptor and associates it with an ``YTStor`` object."""
 
     def push(self, yts):
 
         """
-        Znajdź, dodaj i zwróć nowy deskryptor pliku.
+        Search for, add and return new file descriptor.
 
         Parameters
         ----------
         yts : YTStor-obj or None
-            Obiekt YTStor, dla którego chcemy przydzielić deskryptor lub None, jeśli alokujemy deskryptor dla
-            pliku sterującego.
+            ``YTStor`` object for which we want to allocate a descriptor or ``None``, if we allocate descriptor for a
+            control file.
      
         Returns
         -------
         k : int
-            Deskryptor do pliku.
+            File descriptor.
         """
 
         if not isinstance(yts, (YTStor, type(None))):
@@ -55,37 +55,37 @@ class fd_dict(dict):
 class YTFS(Operations):
 
     """
-    Główna klasa YTFS.
+    Main YTFS class.
 
     Attributes
     ----------
     st : dict
-        Słownik przechowujący podstawowe atrybuty plików. Zobacz: ``man 2 stat``.
+        Dictionary that contains basic file attributes. Consult ``man 2 stat`` for reference.
     searches : dict
-        Słownik będący głównym interfejsem do przechowywanych przez system plików danych o poszczególnych
-        wyszukiwaniach i ich wynikach, czyli filmach. Struktura:
+        Dictionary that is a main interface to data of idividual searches and their results (movies) stored by
+        filesystem. Format:
         
           searches = {
-              'wyszukiwana fraza 1':  YTActions({
+              'search phrase 1':  YTActions({
                                        'tytul1': <YTStor obj>,
                                        'tytul2': <YTStor obj>,
                                        ...
                                       }),
-              'wyszukiwana fraza 2':  YTActions({ ... }),
+              'search phrase 2':  YTActions({ ... }),
               ...
           }
         
-        Obiekt YTStor przechowuje wszystkie potrzebne informacje o filmie, nie tylko dane multimedialne.
+        ``YTStor`` object stores all needed information about movie, not only multimedia data.
 
-        Uwaga: dla uproszczenia rozszerzenia w nazwach plików są obecne wyłącznie podczas wypisywania zawartości
-        katalogu. We wszelkich innych operacjach są upuszczane.
+        Attention: for simplicity, file extensions are present only during directory listing. In all other operations
+        extensions are dropped.
     fds : fd_dict
-        Słownik fd_dict wiążący będące w użyciu deskryptory z obiektami YTStor.
-        Klucz: deskryptor;
-        Wartość: obiekt YTStor dla danego pliku.
+        ``fd_dict`` dictionary which links descriptors in use with corresponding ``YTStor`` objects.
+        Key: descriptor.
+        Value: ``YTStor`` object for given file.
     __sh_script : bytes
-        Zawartość zwracana przy odczycie pliku sterującego (pusty skrypt). System ma mieć wrażenie, że coś wykonał.
-        Faktyczną operacją zajmuje się sam YTFS podczas otwarcia pliku sterującego.
+        Bytes returned during control file read (empty shell script). System has to have impression of executing
+        something. The actual operation is performed by YTFS during control file opening.
     """
 
     st = {
@@ -107,8 +107,6 @@ class YTFS(Operations):
 
     def __init__(self, av):
 
-        """Inicjalizacja obiektu"""
-
         self.searches = dict()
         self.fds = fd_dict()
 
@@ -117,20 +115,20 @@ class YTFS(Operations):
     class PathType(Enum):
 
         """
-        Czytelna reprezentacja typu podanego identyfikatora krotkowego.
+        Human readable representation of path type of given tuple identifier.
 
         Attributes
         ----------
         invalid : int
-            Ścieżka nieprawidłowa
+            Invalid path.
         main : int
-            Katalog główny
+            Main directory.
         subdir : int
-            Podkatalog (katalog wyszukiwania)
+            Subdirectory (search directory).
         file : int
-            Plik (wynik wyszukiwania)
+            File (search result).
         ctrl : int
-            Plik kontrolny
+            Control file.
         """
 
         invalid = 0
@@ -145,20 +143,20 @@ class YTFS(Operations):
             """
             Sprawdź typ ścieżki
 
+
             Parameters
             ----------
             p : str or tuple
-                Ścieżka do pliku lub identyfikator krotkowy
+                Path or tuple identifier.
 
             Returns
             -------
             path_type : PathType
-                Typ pliku jako enumerator PathType
-
+                Path type as ``PathType`` enum.
             """
 
             try:
-                p = YTFS._YTFS__pathToTuple(p) #próba konwersji, jeśli p jest stringiem. inaczej nic się nie stanie
+                p = YTFS._YTFS__pathToTuple(p) # try to convert, if p is string. nothing will happen if not.
             except TypeError:
                 pass
 
@@ -184,45 +182,45 @@ class YTFS(Operations):
     def __pathToTuple(self, path):
 
         """
-        Konwersja ścieżki do katalogu lub pliku na jego identyfikator krotkowy.
+        Convert directory or file path to its tuple identifier.
 
         Parameters
         ----------
         path : str
-            Ścieżka do skonwertowania. Może przybrać postać /, /katalog, /katalog/ lub /katalog/nazwa_pliku.
+            Path to convert. It can look like /, /directory, /directory/ or /directory/filename.
 
         Returns
         -------
         tup_id : tuple
-            Dwuelementowy krotkowy identyfikator katalogu/pliku postaci (katalog, nazwa_pliku). Jeśli ścieżka prowadzi
-            do katalogu głównego, to oba pola krotki przyjmą wartość None. Jeśli ścieżka prowadzi do katalogu
-            wyszukiwania, to pole nazwa_pliku przyjmie wartość None.
+            Two element tuple identifier of directory/file of (`directory`, `filename`) format. If path leads to main
+            directory, then both fields of tuple will be ``None``. If path leads to a directory, then field `filename`
+            will be ``None``.
 
         Raises
         ------
         ValueError
-            W przypadku podania nieprawidłowej ścieżki
+            When invalid path is given.
         """
 
         if not path or path.count('/') > 2:
-            raise ValueError("Bad path given") #pusta ścieżka "" albo zbyt głęboka
+            raise ValueError("Bad path given") # empty or too deep path
 
         try:
             split = path.split('/')
         except (AttributeError, TypeError):
-            raise TypeError("Path has to be string") #path nie jest stringiem
+            raise TypeError("Path has to be string") #path is not a string
 
         if split[0]:
-            raise ValueError("Path needs to start with '/'") #path nie zaczyna się od "/"
+            raise ValueError("Path needs to start with '/'") # path doesn't start with '/'.
         del split[0]
 
         try:
-            if not split[-1]: split.pop() #podana ścieżka kończyła się ukośnikiem
+            if not split[-1]: split.pop() # given path ended with '/'.
         except IndexError:
-            raise ValueError("Bad path given") #przynajmniej jeden element w split powinien na tę chwilę istnieć
+            raise ValueError("Bad path given") # at least one element in split should exist at the moment
 
         if len(split) > 2:
-            raise ValueError("Path is too deep. Max allowed level i 2") #ścieżka jest zbyt długa
+            raise ValueError("Path is too deep. Max allowed level is 2") # should happen due to first check, but ...
 
         try:
             d = split[0]
@@ -234,25 +232,24 @@ class YTFS(Operations):
             f = None
 
         if not d and f:
-            raise ValueError("Bad path given") #jest nazwa pliku, ale nie ma katalogu #przypał
+            raise ValueError("Bad path given") # filename is present, but directory is not #sheeeeeeiiit
 
         return (d, f)
 
     def __exists(self, p):
 
         """
-        Sprawdź czy plik o podanej ścieżce istnieje.
+        Check if file of given path exists.
 
         Parameters
         ----------
         p : str or tuple
-            Ścieżka do pliku
+            Path or tuple identifier.
 
         Returns
         -------
         exists : bool
-            True, jeśli plik istnieje. W przeciwnym razie False.
-
+            ``True``, if file exists. Otherwise ``False``.
         """
 
         try:
@@ -266,20 +263,20 @@ class YTFS(Operations):
     def _pathdec(method):
 
         """
-        Dekorator podmieniający argument path z reprezentacji tekstowej na identyfikator krotkowy.
+        Decorator that replaces string `path` argument with its tuple identifier.
 
         Parameters
         ----------
         method : function
-            Funkcja/metoda do udekorowania.
+            Function/method to decorate.
 
         Returns
         -------
         mod : function
-            Funckja/metoda po dekoracji.
+            Function/method after decarotion.
         """
 
-        @wraps(method) # functools.wraps umożliwia poprawną autogenerację dokumentacji dla udekorowanych funkcji.
+        @wraps(method) # functools.wraps makes docs autogeneration easy and proper for decorated functions.
         def mod(self, path, *args):
 
             try:
@@ -294,20 +291,19 @@ class YTFS(Operations):
     def getattr(self, tid, fh=None):
 
         """
-        Atrybuty pliku.
+        File attributes.
 
         Parameters
         ----------
         tid : str
-            Ścieżka do pliku. Oryginalny argument `path` jest konwertowany przez dekorator `_pathdec` do postaci
-            identyfikatora krotkowego.
+            Path to file. Original `path` argument is converted to tuple identifier by ``_pathdec`` decorator.
         fh : int
-            Deskryptor pliku. Nie jest konieczny, dlatego jest ignorowany.
+            File descriptor. Unnecessary, therefore ignored.
 
         Returns
         -------
         st : dict
-            Słownik zawierający atrybuty pliku. Zobacz: ``man 2 stat``.
+            Dictionary that contains file attributes. See: ``man 2 stat``.
         """
 
         if not self.__exists(tid):
@@ -329,7 +325,7 @@ class YTFS(Operations):
 
         elif pt is self.PathType.ctrl:
 
-            st['st_mode'] = stat.S_IFREG | 0o555 #te uprawnienia chyba trzeba ciutkę podreperować (FIXME?)
+            st['st_mode'] = stat.S_IFREG | 0o555 # correct? (FIXME?)
             st['st_nlink'] = 1
             st['st_size'] = len(self.__sh_script)
 
@@ -341,20 +337,19 @@ class YTFS(Operations):
     def readdir(self, tid, fh):
 
         """
-        Listowanie katalogu. Wypisuje widoczne elementy obiektu `YTActions`.
+        Read directory contents. Lists visible elements of ``YTActions`` object.
 
         Parameters
         ----------
         tid : str
-            Ścieżka do pliku. Oryginalny argument `path` jest konwertowany przez dekorator `_pathdec` do postaci
-            identyfikatora krotkowego.
+            Path to file. Original `path` argument is converted to tuple identifier by ``_pathdec`` decorator.
         fh : int
-            Deskryptor pliku. Pomijany w ciele funkcji.
+            File descriptor. Ommited in the function body.
 
         Returns
         -------
         list
-            Lista nazw plików, która zostanie wyświetlona jako zawartość katalogu.
+            List of filenames, wich will be shown as directory content.
         """
 
         ret = []
@@ -381,15 +376,14 @@ class YTFS(Operations):
     def mkdir(self, tid, mode):
 
         """
-        Utworzenie katalogu.
+        Directory creation. Search is performed.
 
         Parameters
         ----------
         tid : str
-            Ścieżka do pliku. Oryginalny argument `path` jest konwertowany przez dekorator `_pathdec` do postaci
-            identyfikatora krotkowego.
+            Path to file. Original `path` argument is converted to tuple identifier by ``_pathdec`` decorator.
         mode : int
-            Ignorowany.
+            Ignored.
         """
 
         pt = self.PathType.get(tid)
@@ -409,18 +403,19 @@ class YTFS(Operations):
     def rename(self, old, new):
 
         """
-        Zmiana nazwy katalogu. Potrzebne z uwagi na to, że wiele menadżerów plików tworzy katalog z domyślną nazwą,
-        co uniemożliwia dokonania wyszukiwania bez użycia cli. Nie dopuszczamy możliwości zmiany nazwy pliku.
+        Directory renaming support. Needed because many file managers create directories with default names, wich
+        makes it impossible to perform a search without CLI. Name changes for files are not allowed, only for
+        directories.
 
         Parameters
         ----------
         old : str
-            Stara nazwa. Konwertowana przez _pathdec do postaci identyfikatora krotkowego.
+            Old name. Converted to tuple identifier by ``_pathdec`` decorator.
         new : str
-            Nowa nazwa. Konwertowana do postaci identyfikatora krotkowego dopiero we właściwym ciele funkcji.
+            New name. Converted to tuple identifier in actual function body.
         """
 
-        new = self.__pathToTuple(new) # new też należy skonwertować.
+        new = self.__pathToTuple(new)
 
         if not self.__exists(old):
             raise FuseOSError(errno.ENOENT)
@@ -446,13 +441,12 @@ class YTFS(Operations):
     def rmdir(self, tid):
 
         """
-        Usunięcie katalogu. Obiektowi YTActions leżącemu pod `tid` zleca się wyczyszczenie danych, a następnie usuwa.
+        Directory removal. ``YTActions`` object under `tid` is told to clean all data, and then it is deleted.
 
         Parameters
         ----------
         tid : str
-            Ścieżka do pliku. Oryginalny argument `path` jest konwertowany przez dekorator `_pathdec` do postaci
-            identyfikatora krotkowego.
+            Path to file. Original `path` argument is converted to tuple identifier by ``_pathdec`` decorator.
         """
 
         pt = self.PathType.get(tid)
@@ -475,14 +469,13 @@ class YTFS(Operations):
     def unlink(self, tid):
 
         """
-        Usunięcie pliku. Tak naprawdę nie usuwamy nic, ale żeby udało się usunąć katalog przez ``rm -r``, oszukujemy
-        powłokę, że funkcja wykonała się prawidłowo.
+        File removal. In fact nothing is deleted, but for correct ``rm -r`` handling we deceive shell, that function
+        has succeed.
 
         Parameters
         ----------
         tid : str
-            Ścieżka do pliku. Oryginalny argument `path` jest konwertowany przez dekorator `_pathdec` do postaci
-            identyfikatora krotkowego.
+            Path to file. Original `path` argument is converted to tuple identifier by ``_pathdec`` decorator.
         """
 
         return 0
@@ -491,21 +484,19 @@ class YTFS(Operations):
     def open(self, tid, flags):
 
         """
-        Otwarcie pliku. Obiekt YTStor przypisany do tego pliku jest inicjalizowany i wpisywany do słownika
-        deskryptorów.
+        File open. ``YTStor`` object associated with this file is initialised and written to ``self.fds``.
         
         Parameters
         ----------
         tid : str
-            Ścieżka do pliku. Oryginalny argument `path` jest konwertowany przez dekorator `_pathdec` do postaci
-            identyfikatora krotkowego.
+            Path to file. Original `path` argument is converted to tuple identifier by ``_pathdec`` decorator.
         flags : int
-            Tryb otwarcia pliku. Zezwalamy tylko na odczyt.
+            File open mode. Read-only access is allowed.
 
         Returns
         -------
         int
-            Nowy deskryptor pliku.
+            New file descriptor
         """
 
         pt = self.PathType.get(tid)
@@ -522,44 +513,44 @@ class YTFS(Operations):
         try:
             yts = self.searches[tid[0]][tid[1]]
 
-            if yts.obtainInfo(): #FIXME bo brzydko
+            if yts.obtainInfo(): #FIXME coz it's ugly.
                 fh = self.fds.push(yts)
                 yts.registerHandler(fh)
-                return fh #zwracamy deskryptor (powiązanie z YTStor)
+                return fh
             else:
-                raise FuseOSError(errno.ENOENT) #FIXME? nie wiem czy pasi
+                raise FuseOSError(errno.ENOENT) #FIXME? dunno if it's suitable.
 
         except KeyError:
-            return self.fds.push(None) #zwracamy deskryptor (nie potrzeba żadnego powiązania dla pliku sterującego)
+            return self.fds.push(None) # for control file no association is needed.
 
     @_pathdec
     def read(self, tid, length, offset, fh):
 
         """
-        Odczyt z pliku. Dane uzyskiwane są od obiektu YTStor (zapisanego pod deskryptorem fh) za pomocą metody read.
+        Read from a file. Data is obtained from ``YTStor`` object (which is kept under `fh` descriptor) using its
+        ``read`` method.
 
         Parameters
         ----------
         tid : str
-            Ścieżka do pliku. Oryginalny argument `path` jest konwertowany przez dekorator `_pathdec` do postaci
-            identyfikatora krotkowego.
+            Path to file. Original `path` argument is converted to tuple identifier by ``_pathdec`` decorator.
         length : int
-            Ilość danych do odczytania.
+            Length of data to read.
         offset : int
-            Pozycja z której rozpoczynamy odczyt danych.
+            Posision from which reading will start.
         fh : int
-            Deskryptor pliku.
+            File descriptor.
 
         Returns
         -------
         bytes
-            Dane filmu.
+            Movie data.
         """
 
         try:
             return self.fds[fh].read(offset, length, fh)
 
-        except AttributeError: #plik sterujący
+        except AttributeError: # control file
 
             if tid[1] == " next":
                 d = True
@@ -571,25 +562,25 @@ class YTFS(Operations):
             try:
                 self.searches[tid[0]].updateResults(d)
             except KeyError:
-                raise FuseOSError(errno.EINVAL) #no coś nie pykło
+                raise FuseOSError(errno.EINVAL) # sth went wrong...
 
             return self.__sh_script[offset:offset+length]
 
-        except KeyError: #deskryptor nie istnieje
+        except KeyError: # descriptor does not exist.
             raise FuseOSError(errno.EBADF)
 
     @_pathdec
     def release(self, tid, fh):
 
         """
-        Zamknięcie pliku. Deskryptor pliku jest usuwany z self.fds.
+        Close file. Descriptor is removed from ``self.fds``.
 
         Parameters
         ----------
         tid : str
-            Ścieżka do pliku. Ignorowana.
+            Path to file. Ignored.
         fh : int
-            Deskryptor pliku przeznaczony do zwolnienia.
+            File descriptor to release.
         """
 
         try:

@@ -1,5 +1,5 @@
 """
-Moduł dostarczający klasę range_t, która umożliwia prosty i kompaktowy zapis zbiorów liczbowych.
+Module that provides range_t class which offers a simple and compact way of representing number sets.
 """
 
 from copy import deepcopy
@@ -8,26 +8,26 @@ from threading import Event
 class range_t():
 
     """
-    Klasa pozwalająca na prosty zapis wielu zakresów w jednym obiekcie (multiple range).
-    Podzakresy są reprezentowane przez dwuelementowe krotki, gdzie pierwszy element to lewy kraniec przedziału, a drugi
-    to prawy. Lewy jest zawsze domknięty, a prawy zawsze otwarty (analogicznie jak w obiekcie typu range).
+    Class offers simple representation of multiple ranges as one object.
+    Subranges are represented as two element tuples, where first element is a left boundary and second element is a
+    right range boundary. The left one is always included, whereas right is always excluded from the range.
 
     Attributes
     ----------
     __has : set
-        Zbiór podzakresów.
+        Set of subranges.
     waitings : dict
-        Słownik zakresów, na które mogą oczekiwać wątki. Kluczem jest zakres, wartością obiekt threading.Event
+        Dictionary of ranges for which threads can wait. Key - range to wait for, value - ``threads.Event`` object.
 
     Parameters
     ----------
     initset : set, optional
-        Początkowy zbiór składowych podzakresów. Domyślnie pusty.
+        Initial set of subranges. Empty set is the default value.
     """
 
     def __init__(self, initset=set()):
 
-        self.__has = set() #zbiór posiadanych zakresów
+        self.__has = set()
         self.waitings = dict()
 
         if not isinstance(initset, set):
@@ -43,67 +43,67 @@ class range_t():
     def __match_l(self, k, _set):
 
         """
-        Metoda szukająca zachodzących na k podzakresów ze zbioru _set.
+        Method for searching subranges from `_set` that overlap on `k` range.
 
         Parameters
         ----------
         k : tuple or list or range
-            Zakres, dla którego sprawdzamy nachodzące podzakresy z _set.
+            Range for which we search overlapping subranges from `_set`.
         _set : set
-            Zbiór podzakresów.
+            Subranges set.
 
         Returns
         -------
         matched : set
-            Zbiór podzakresów ze zbioru _set zachodzących na k.
+            Set of subranges from `_set` that overlaps on `k`.
         """
 
         return {r for r in _set if k[0] in range(*r) or k[1] in range(*r) or (k[0] < r[0] and k[1] >= r[1])}
-                                   #k częściowo lub w całości w r            #r zawiera się w całości w k
+                                   #k partially or wholly in r               #r is wholly contained by k
     def __optimize(self):
 
         """
-        Połącz nachodzące na siebie lub stykające się podzakresy zapisane w atrybucie __has. Wywoływane z wszystkich
-        metod, które modyfikują zawartość obiektu.
+        Merge overlapping or contacting subranges from ``self.__has`` attribute and update it. Called from all methods
+        that modify object contents.
 
         Returns
         -------
         None
-            Metoda nie zwraca. Operuje na ukrytym atrybucie self.__has.
+            Method does not return. It does internal modifications on ``self.__has`` attribute.
         """
 
         ret = []
 
         for (begin, end) in sorted(self.__has):
 
-            if ret and begin <= ret[-1][1] < end: # jeśli bieżący zakres zachodzi na ostatni z ret
+            if ret and begin <= ret[-1][1] < end: # when current range overlaps with the last one from ret
                 ret[-1] = (ret[-1][0], end)
             elif not ret or begin > ret[-1][1]:
                 ret.append( (begin, end) )
 
         self.__has = set(ret)
 
-        self.checkWaitings() #sprawdzamy, czy ktoś na nas nie czeka, może pojawiły się nowe zakresy?
+        self.checkWaitings() # check if a subrange that someone waits for has appeared.
 
-    def __val_convert(self, val): #chyba przerobię to na dekorator dla wszystkich funkcji, które dostają val.
+    def __val_convert(self, val): # maybe I should make a decorator from this.
 
         """
-        Konwertuj dane wejściowe na krotkę (start, end)
+        Convert input data to a range tuple (start, end).
 
         Parameters
         ----------
         val : int or tuple or list or range
-            Dwuelementowy obiekt przedstawiający zakres lub liczba całkowita.
+            Two element indexed object, that represents a range, or integer.
 
         Returns
         -------
         converted : tuple
-            Krotka reprezentująca zakres.
+            Tuple that represents a range.
         """
 
-        converted = (0, 0) #to tak w razie czego...
+        converted = (0, 0) # just in case
 
-        #zamiana val na krotkę (start, end):
+        # validate and change val to a tuple.
 
         if isinstance(val, range) and 0 <= val.start < val.stop and val.step == 1:
 
@@ -124,76 +124,76 @@ class range_t():
     def contains(self, val):
 
         """
-        Sprawdź, czy dana wartość lub zakres jest zawarta w obiekcie.
+        Check if given value or range is present.
 
         Parameters
         ----------
         val : int or tuple or list or range
-            Badany zakres lub liczba całkowita.
+            Range or integer being checked.
 
         Returns
         -------
         retlen : int
-            Długość pokrywających się z val obszarów.
+            Length of overlapping with `val` subranges.
         """
 
-        (start, end) = self.__val_convert(val) #konwersja
+        (start, end) = self.__val_convert(val) # conversion
 
         retlen = 0
         for r in self.__has:
             if start < r[1] and end > r[0]:
-                retlen += ((end < r[1] and end) or r[1]) - ((start > r[0] and start) or r[0]) #chyba mam bzika na punkcie zwięzłego kodu :x
+                retlen += ((end < r[1] and end) or r[1]) - ((start > r[0] and start) or r[0])
 
         return retlen
 
     def __contains__(self, val):
 
         """
-        Metoda pozwalająca na użycie operatora in.
+        Method which allows for ``in`` operator usage.
 
         Parameters
         ----------
         val : int or tuple or list or range
-            Badany zakres lub liczba całkowita.
+            Range or integer being checked.
 
         Returns
         -------
         bool
-            True, jeśli cały badany zakres zawiera się w obiekcie. W przeciwnym razie False.
+            ``True`` if **whole** examined range is present in object. Otherwise ``False``.
         """
         
-        conv = self.__val_convert(val) #konwersja
+        conv = self.__val_convert(val) # conversion
         return self.contains(val) == conv[1] - conv[0]
 
     def match(self, val):
 
         """
-        Znajdź pokrywające się z val podzakresy. De facto jest widocznym wrapperem ukrytego __match_l.
+        Search for overlapping with `val` subranges. In fact, it is a visible wrapper of hidden ``__match_l``.
 
         Parameters
         ----------
         val : int or tuple or list or range
-            Badany zakres lub liczba całkowita.
+            Range or integer being checked.
 
         Returns
         -------
         set
-            Zbiór pokrywających się podzakresów.
+            Set of overlapping subranges.
         """
         
-        conv = self.__val_convert(val) #konwersja
+        conv = self.__val_convert(val) # conversion
 
         return self.__match_l(conv, self.__has)
 
     def toset(self):
 
         """
-        Konwersja obiektu na zbiór podzakresów.
+        Convert object to a set of subranges.
 
         Returns
         -------
         set
-            Zwracany jest ukryty atrybut __has.
+            ``self.__has`` is returned.
         """
 
         return self.__has
@@ -201,28 +201,27 @@ class range_t():
     def __add(self, val):
 
         """
-        Metoda pomocnicza, dodawanie zakresów. możliwe jest dodawanie jednego spójnego podzakresu naraz, albo
-        obiektu range_t.
+        Helper method for range addition. It is allowed to add only one compact subrange or ``range_t`` object at once.
 
         Parameters
         ----------
         val : int or tuple or list or range
-            Liczba całkowita lub zakres przeznaczony do dodania.
+            Integer or range to add.
 
         Returns
         -------
         __has : set
-            Zbiór self.__has poszerzony o nowy przedział.
+            ``self.__has`` extended by `val`.
         """
 
         if not isinstance(val, range_t):
-            #sanitize it, bo czemu nie. przy okazji sprawdzamy, czy dane wejściowe są ok.
-            val = {self.__val_convert(val)} #przerabiamy na zbiór, bo tak mi wygodnie.
+            #sanitize it
+            val = {self.__val_convert(val)} # convert to a set, coz I like it that way.
 
         else:
             val = val.toset()
 
-        __has = deepcopy(self.__has) #po prostu dodajemy do zbioru
+        __has = deepcopy(self.__has) # simply add to a set.
         __has.update(val)
 
         return __has
@@ -230,17 +229,17 @@ class range_t():
     def __add__(self, val):
 
         """
-        Obsługa operacji a + b.
+        ``a + b`` operation support.
 
         Parameters
         ----------
         val : int or tuple or list or range
-            Liczba całkowita lub zakres przeznaczony do dodania.
+            Integer or range to add.
 
         Returns
         -------
         range_t
-            Nowy obiekt range_t poszerzony o val.
+            New ``range_t`` object extended by `val`.
         """
 
         return range_t(self.__add(val))
@@ -248,17 +247,17 @@ class range_t():
     def __iadd__(self, val):
 
         """
-        Obsługa operacji a += b. Różni się od __add__ tym, że nie jest tworzony nowy obiekt.
+        ``a += b`` operation support. The difference from ``+`` is that no new object is created.
 
         Parameters
         ----------
         val : int or tuple or list or range
-            Liczba całkowita lub zakres przeznaczony do dodania.
+            Integer or range to add.
 
         Returns
         -------
         self : range_t
-            Zwracany jest bieżący obiekt poszerzony o val.
+            No new object is created, the current one is extended by `val` and returned.
         """
 
         self.__has = self.__add(val)
@@ -269,50 +268,50 @@ class range_t():
     def __sub__(self, val):
 
         """
-        Odejmowanie (na analogicznych zasadach co dodawanie).
+        Substracting support.
         
         Parameters
         ----------
         val : int or tuple or list or range
-            Liczba całkowita lub zakres przeznaczony do odjęcia.
+            Integer or range to substract.
 
         Returns
         -------
         range_t
-            Obiekt range_t pozbawiony val.
+            New ``range_t`` object bereft of `val`.
         """
 
         if not isinstance(val, range_t):
             #sanitize it!
-            val = {self.__val_convert(val)} # j/w
+            val = {self.__val_convert(val)}
         else:
             val = val.toset()
 
         __has = deepcopy(self.__has)
 
         for v in val:
-            common = self.__match_l(v, __has) #szukamy kolidujących podzakresów
-            if not common: continue #brak kolizji - nic do odjęcia.
+            common = self.__match_l(v, __has) # search for colliding subranges.
+            if not common: continue # no collisions - nothing to substract.
 
-            __has.difference_update(common) #usuwamy kolizje, bo musimy je przeciąć
+            __has.difference_update(common) # we delete collisions, beacause we need to cut them.
 
             minmax = (min({l[0] for l in common}), max({r[1] for r in common}))
-            #z kolizyjnych podzakresów zawsze dostaniemy po odjęciu dwa podzakresy albo jeden, jeśli v zachodzi na
-            #jeden podzakres jednym końcem
+
             if minmax[0] < v[0]: __has.add((minmax[0], v[0]))
             if minmax[1] > v[1]: __has.add((v[1], minmax[1]))
+            # we get two, one or zero "new" subranges. __optimize is not necessary.
 
         return range_t(__has)
 
     def __len__(self):
 
         """
-        Długość obiektu.
+        Length of object.
 
         Returns
         -------
         ret : int
-            Suma długości posiadanych podzakresów.
+            Sum of subranges lengths.
         """
 
         ret = 0
@@ -325,16 +324,17 @@ class range_t():
 
         """
         Operacja porównania.
+        ``=`` operator support.
 
         Parameters
         ----------
         val : range_t
-            Obiekt range_t do porównania.
+            ``range_t`` object for comparison.
 
         Returns
         -------
         bool
-            True, jeśli zbiór posiadanych podzakresów jest identyczny jak w obiekcie val.
+            ``True`` if set of subranges in this object is identical as in `val` object.
         """
         if not isinstance(val, range_t):
             raise ValueError("Expected range_t to compare.")
@@ -344,8 +344,8 @@ class range_t():
     def checkWaitings(self):
 
         """
-        Sprawdź, czy zakresy z self.waitings nie zostały uzupełnione. Jeśli tak, to wyemituj zdarzenie i usuń zakres
-        ze słownika.
+        Check if any ranges from ``self.waitings`` haven't been added to the object. If so, then emit an event and delete
+        subrange form a dictionary.
         """
 
         to_rem = set()
@@ -358,17 +358,17 @@ class range_t():
     def setWaiting(self, val):
         
         """
-        Zaczekaj na dodanie zakresu do obiektu.
+        Wait for `val` addition into this object.
 
         Parameters
         ----------
         val : int or tuple or list or range
-            Liczba całkowita lub zakres, na który chcemy zaczekać
+            Integer or range which we want to wait for.
         """
 
-        conv = self.__val_convert(val) #konwersja
+        conv = self.__val_convert(val) # conversion.
 
-        if conv in self: return # już jest :)
+        if conv in self: return # already here :)
 
-        self.waitings[conv] = Event() # tworzymy zdarzenie i ...
-        self.waitings[conv].wait() # ... czekamy
+        self.waitings[conv] = Event() # create an event and ...
+        self.waitings[conv].wait() # ... wait.
