@@ -15,8 +15,8 @@ YTFS - FIle system which enables user to search and read movies from `YouTube <h
    tutorial
    developer
 
-Indeksy i wyszukiwarka
-======================
+Indices and Tables
+==================
 
 * :ref:`genindex`
 * :ref:`modindex`
