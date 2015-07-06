@@ -22,9 +22,9 @@ Example (when working directory contains ``ytfs.py``)::
 
     larry@localhost ~/ytfs $ ./ytfs.py -v /tmp/youtube-dir
 
-YTFS will mounted in /tmp/youtube-dir. Only video data will be downloaded (no sound).
+YTFS will be mounted in /tmp/youtube-dir. Only video data will be downloaded (no sound).
 
-.. hint:: If an error (which is not an Python interpreter error) occurs, e.g. ``fusermount: failed to open /etc/fuse.conf: Permission denied``, then YTFS is probably mounted correctly and can be used with no problems.
+.. hint:: If an error (which is not a Python interpreter error) occurs, e.g. ``fusermount: failed to open /etc/fuse.conf: Permission denied``, then YTFS is probably mounted correctly and can be used with no problems.
 
 Searching
 =========
@@ -54,7 +54,6 @@ In a directory, only 10 results are shown. To navigate between search pages one 
     **next** : Load next 10 results.
     **prev** : Load previous 10 results.
 
-Pliki sterujące nie będą obecne w katalogu, jeżeli nie ma możliwości wczytania następnych lub poprzednich wyników.
 Control files won't be present in a directory, if it's impossible to load next or previous results.
 
 To switch between pages, execute *next* or *prev*::

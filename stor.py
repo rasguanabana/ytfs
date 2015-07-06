@@ -84,8 +84,6 @@ class Downloader():
 class YTStor():
 
     """
-    YTStor - serce YTFS. Klasa odpowiedzialna za zdobywanie i przechowywanie danych oraz informacji o filmie o podanym
-    identyfikatorze.
     ``YTStor`` - the heart of YTFS. Class responsible for obtaining and storing data and information about a movie of
     given id.
 
@@ -209,7 +207,7 @@ class YTStor():
         Parameters
         ----------
         fh : int
-            Deskryptor pliku.
+            File descriptor.
         """
 
         if (0, self.filesize) not in self.avail and self.SET_AV == YTStor.DL_AUD | YTStor.DL_VID:

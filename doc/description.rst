@@ -12,8 +12,6 @@ YTFS, with one exception, is a read-only filesystem. The exception is permission
 
 By creating a directory (`mkdir`) of given name, user tells YTFS to perform search of this name in YouTube and to put results in this directory. For example, creation of directory named *python* will cause YTFS to put movies which are the results of searching *python* in this directory. One can create many directories like this.
 
-Zmiana nazwy katalogu jest równaznaczna usunięciu katalogu o starej nazwie i stworzeniu nowego katalogu. Funkcjonalność jest zaimplementowana z uwagi na to, że wiele menadżerów plików, podczas tworzenia nowego katalogu, nadaje mu domyślną nazwę (np. Nowy folder), co bez możliwości przezwania katalogu uniemożliwiałoby dokonania sensownego wyszukiwania.
-
 Directory renaming is equivalent to old named directory removal and creation of new named directory. This functionality is implemented due to a fact, that many file managers gives default name to newly created directories (e.g. `New Folder`) which would render YTFS even unusable, if there was no possibility of renaming it.
 
 Example::

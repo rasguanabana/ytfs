@@ -146,7 +146,7 @@ class YTFS(Operations):
         def get(p):
 
             """
-            Sprawdź typ ścieżki
+            Get path type.
 
 
             Parameters

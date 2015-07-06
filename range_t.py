@@ -149,7 +149,7 @@ class range_t():
     def __contains__(self, val):
 
         """
-        Method which allows for ``in`` operator usage.
+        Method which allows ``in`` operator usage.
 
         Parameters
         ----------
@@ -323,7 +323,6 @@ class range_t():
     def __eq__(self, val):
 
         """
-        Operacja porównania.
         ``=`` operator support.
 
         Parameters
