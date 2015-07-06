@@ -8,8 +8,9 @@ To mount YTFS in a chosen directory, one should execute ``ytfs.py`` and provide 
 
 Avalaible options:
 
-|   **-a** : Download audio (default).
-|   **-v** : Download video.
+|   **-a** : Download audio (default)
+|   **-v** : Download video
+|   **-r** : RickRoll flag
 
 .. important:: YTFS choses best quality available. Format selection will be implemented in the future.
 

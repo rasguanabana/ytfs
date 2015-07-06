@@ -117,13 +117,16 @@ class YTStor():
         A dictionary wich contains info about movie data being downloaded. More precisely, it is a dict one can find
         under ``'requested_formats'`` key in ``YoutubeDL.extract_info`` function result.
 
-    DL_VID : int
+    DL_VID : bytes
         Constant, which written to SET_AV, will instruct object to download video data.
-    DL_AUD : int
+    DL_AUD : bytes
         Constant, which written to SET_AV, will instruct object to download audio data.
-    SET_AV : int
+    SET_AV : bytes
         Attribute wich stores information about what kind of data object will download. It consists of combination of
         DL_VID and DL_AUD.
+
+    RICKASTLEY : bool
+        Make every video rickroll
 
     Parameters
     ----------
@@ -134,6 +137,8 @@ class YTStor():
     DL_VID = 0b10
     DL_AUD = 0b01
     SET_AV = 0b11
+
+    RICKASTLEY = False
 
     @staticmethod
     def _setDownloadManner(av):
@@ -158,6 +163,9 @@ class YTStor():
         YTStor.SET_AV = av
 
     def __init__(self, yid):
+
+        if self.RICKASTLEY:
+            yid = "dQw4w9WgXcQ" #trolololo
 
         if not isinstance(yid, str) or len(yid) != 11:
             raise ValueError("yid expected to be valid Youtube movie identifier") #FIXME

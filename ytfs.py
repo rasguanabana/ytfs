@@ -57,6 +57,11 @@ class YTFS(Operations):
     """
     Main YTFS class.
 
+    Parameters
+    ----------
+    av : bytes
+        Tell filesystem what kind of data (audio and/or video) it should download.
+
     Attributes
     ----------
     st : dict
@@ -596,15 +601,17 @@ def main(mountpoint, av):
 
 if __name__ == '__main__':
     
-    parser = ArgumentParser(description="YTFS - Youtube Filesystem: wyszukuj i odtwarzaj materiały z serwisu Youtube za pomocą operacji na plikach.", epilog="aby pobierać dźwięk oraz wideo należy połączyć flagi -a i -v.")
-    parser.add_argument('mountpoint', type=str, nargs=1, help="punkt montowania")
-    parser.add_argument('-a', action='store_true', default=False, help="pobieraj dźwięk (domyślne).")
-    parser.add_argument('-v', action='store_true', default=False, help="pobieraj obraz")
+    parser = ArgumentParser(description="YTFS - Youtube Filesystem: search and play materials from YouTube using filesystem operations.", epilog="to download both audio and video data, -a and -v flags have to be used simultaneously.")
+    parser.add_argument('mountpoint', type=str, nargs=1, help="Mountpoint")
+    parser.add_argument('-a', action='store_true', default=False, help="Download audio (default)")
+    parser.add_argument('-v', action='store_true', default=False, help="Download video")
+    parser.add_argument('-r', action='store_true', default=False, help="RickRoll flag")
 
     x = parser.parse_args()
 
     av = 0b00
     if x.a: av |= YTStor.DL_AUD
     if x.v: av |= YTStor.DL_VID
+    if x.r: YTStor.RICKASTLEY = True
 
     main(x.mountpoint[0], av)
