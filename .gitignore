@@ -6,4 +6,5 @@ fusepy
 *.bak
 *.swp
 test
-doc
+doc/_build
+doc/_static
