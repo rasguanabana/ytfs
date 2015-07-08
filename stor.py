@@ -42,13 +42,16 @@ class Downloader():
             Method does not return; data is written directly to `yts` object.
         """
 
-        if yts.SET_AV == YTStor.DL_AUD | YTStor.DL_VID:
+        av = yts.opts.get('av', yts.SET_AV)
+
+        if av == YTStor.DL_AUD | YTStor.DL_VID and yts.url.get("audio") and yts.url.get("video") and not yts.streaming:
+            #condition for merging.
 
             with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as d, tempfile.NamedTemporaryFile(prefix='a') as a, tempfile.NamedTemporaryFile(prefix='v') as v:
                 # after with statement, files - save d - shall be removed
 
-                v.write(yts.r_session.get(yts.info[0]['url']).content) # download video
-                a.write(yts.r_session.get(yts.info[1]['url']).content) # download audio
+                v.write(yts.r_session.get(yts.url['video']).content)
+                a.write(yts.r_session.get(yts.url['audio']).content)
 
                 PP = youtube_dl.postprocessor.FFmpegMergerPP(yts.ytdl)
                 PP.run({'filepath': d.name, '__files_to_merge': (v.name, a.name)}) # merge
@@ -65,21 +68,39 @@ class Downloader():
 
             os.remove(_d)
 
-        else:
+        else: # no merging
 
-            hr = (needed_range[0], needed_range[1] - 1)
+            if av == YTStor.DL_AUD:
+                print('aud')
+                url = yts.url['audio']
+            elif av == YTStor.DL_VID:
+                print('vid')
+                url = yts.url['video']
+            elif av == YTStor.DL_VID | YTStor.DL_AUD:
+                print('full')
+                url = yts.url['full']
 
-            get = yts.r_session.get(yts.info[2 - yts.SET_AV]['url'], headers={'Range': 'bytes=' + '-'.join(str(i) for i in hr)})
-            yts.data.seek(hr[0])            #SET_AV equals 2 or 1
-            yts.data.write(get.content)
-            yts.data.flush()
+            if yts.streaming is False: # preload
 
-            ret = list( int(s) for s in get.headers.get('content-range').split(' ')[1].split('/')[0].split('-') )
-            ret[1] += 1
+                yts.data.write(yts.r_session.get(url).content)
+                yts.data.flush()
 
-            yts.avail += tuple(ret)
-            yts.processing_range -= needed_range
+                yts.avail += (0, yts.filesize)
 
+            else: # stream
+
+                hr = (needed_range[0], needed_range[1] - 1)
+
+                get = yts.r_session.get(url, headers={'Range': 'bytes=' + '-'.join(str(i) for i in hr)})
+                yts.data.seek(hr[0])
+                yts.data.write(get.content)
+                yts.data.flush()
+
+                ret = list( int(s) for s in get.headers.get('content-range').split(' ')[1].split('/')[0].split('-') )
+                ret[1] += 1
+
+                yts.avail += tuple(ret)
+                yts.processing_range -= needed_range
 
 class YTStor():
 
@@ -91,6 +112,8 @@ class YTStor():
     ----------
     data : SpooledTemporaryFile
         Temporary file object - actual data is stored here.
+    streaming : bool
+        Whether to stream content or download all at once.
     global_dl_lock : bool
         Global download lock. Used when merge of audio and video is needed because all data has to be downloaded
         at once.
@@ -111,17 +134,32 @@ class YTStor():
         start a download.
     yid : str
         YouTube id of a video which this object represents.
-    info : dict
-        A dictionary wich contains info about movie data being downloaded. More precisely, it is a dict one can find
-        under ``'requested_formats'`` key in ``YoutubeDL.extract_info`` function result.
+    opts : dict
+        Options provided to ``__init__``
+    url : dict
+        A dictionary containing urls to content. Keys:
+        `video`: video url,
+        `audio`: audio url,
+        `full`:  url to movie with both audio and video.
+        Values may be ``None`` if url is not present.
 
-    DL_VID : bytes
+    DL_VID : int
         Constant, which written to SET_AV, will instruct object to download video data.
-    DL_AUD : bytes
+    DL_AUD : int
         Constant, which written to SET_AV, will instruct object to download audio data.
-    SET_AV : bytes
+    SET_AV : int
         Attribute wich stores information about what kind of data object will download. It consists of combination of
-        DL_VID and DL_AUD.
+        DL_VID and DL_AUD. DL_AUD is default value.
+
+    SET_STREAM : bool or None
+        ``True``: try streaming whenever possible (quality might be lower).
+        ``False``: always load whole data before reading.
+        ``None``: decide automatically.
+
+    SET_FMT : str or None
+        Custom, yet global, user specified format. ``None`` by default.
+    FALLBACK : str
+        If custom format isn't found or not specified then this will be chosen.
 
     RICKASTLEY : bool
         Make every video rickroll
@@ -134,33 +172,16 @@ class YTStor():
 
     DL_VID = 0b10
     DL_AUD = 0b01
-    SET_AV = 0b11
+    SET_AV = 0b01
+
+    SET_STREAM = None
+
+    SET_FMT = None
+    FALLBACK_FMT = "bestvideo[height<=?1080]+bestaudio/best"
 
     RICKASTLEY = False
 
-    @staticmethod
-    def _setDownloadManner(av):
-
-        """
-        Static method that sets the attibute which instructs ``Downloader`` what it will download (``SET_AV``).
-
-        Parameters
-        ----------
-        av : int
-            Two bit number, whose bits tells what ``Downloader`` shall download. The first bit is responsible for
-            audio, the second bit for video. For value assignment ``YTStor.DL_AUD`` and ``YTStor.DL_VID`` constants are
-            used.  Attention: when audio and video data download is selected, then download and merge are performed
-            during ``open`` system call. Otherwise, audio/video data is downloaded dynamically on ``read``.
-        """
-
-        if not (isinstance(av, int) and 0 <= av <= 3):
-            raise ValueError("av needs to be combination of YTStor.DL_AUD and YTStor.DL_VID");
-
-        if av == 0: av = YTStor.DL_AUD # audio downloading is default.
-
-        YTStor.SET_AV = av
-
-    def __init__(self, yid):
+    def __init__(self, yid, opts=dict()):
 
         if self.RICKASTLEY:
             yid = "dQw4w9WgXcQ" #trolololo
@@ -182,7 +203,13 @@ class YTStor():
         self.r_session = requests.Session()
 
         self.yid = yid
-        self.ytdl = youtube_dl.YoutubeDL({"quiet": True, "format": "bestvideo+bestaudio"})
+        self.opts = opts
+
+        self.url = dict()
+
+        fmt = "/".join(f for f in [opts.get('format'), self.SET_FMT, self.FALLBACK_FMT] if f and isinstance(f, str))
+
+        self.ytdl = youtube_dl.YoutubeDL({"quiet": True, "format": fmt})
         self.ytdl.add_info_extractor( self.ytdl.get_info_extractor("Youtube") )
 
     def obtainInfo(self):
@@ -191,18 +218,61 @@ class YTStor():
         Method for obtaining information about the movie.
         """
 
-        self.info = self.ytdl.extract_info(self.yid, download=False)['requested_formats']
-        try:
-            self.filesize = self.info[2 - self.SET_AV]['filesize']
-        except (KeyError, IndexError):
-            pass
+        info = self.ytdl.extract_info(self.yid, download=False)
 
-        return True #FIXME
+        # url:
+
+        want_stream = self.opts.get('stream', self.SET_STREAM) # get value from opts, get SET_STREAM if not present.
+        av = self.opts.get('av', self.SET_AV)
+
+        get_filesize = None # whether to obtain filesize by HEAD http request
+
+        try:
+            if av == self.DL_AUD | self.DL_VID and want_stream and not tuple(f for f in info['formats'] if "DASH" not in f['format']):
+                # user selected audio+video, prefers streaming and streamable formats are available
+
+                self.streaming = True
+
+                fmts = [info['formats'][-1]] # `best` equivalent. TODO make sure it's true.
+                self.filesize = self.r_session.head(fmts['url'])['content-length']
+
+            else:
+                self.streaming = False if want_stream is False else None # False if False, None if True or None.
+
+                fmts = info['requested_formats'] # got separate audio and video.
+                self.filesize = fmts[2 - av]['filesize']
+
+        except KeyError:
+
+            if "+" in info['format']: # something went wrong, requested_formats should've been accessible
+                raise ValueError #FIXME?
+
+            fmts = [info]
+            self.filesize = info['filesize']
+
+        for el in fmts:
+
+            if "audio" in el['format']:
+                self.url['audio'] = el['url']
+
+            elif "video" in el['format']:
+                self.url['video'] = el['url']
+
+            elif len(fmts) == 1:
+                self.url['full'] = el['url']
+
+            else:
+                raise ValueError #FIXME? not sure if ValueError suits it.
+
+        if (av == YTStor.DL_AUD and 'audio' in self.url) or (av == YTStor.DL_VID and 'video' in self.url) or (av == YTStor.DL_AUD | YTStor.DL_VID and (('audio' in self.url and 'video' in self.url) or 'full' in self.url)):
+            return True
+        else:
+            return False
     
     def registerHandler(self, fh): # Do I even need that? possible FIXME.
 
         """
-        Regidter new file descriptor.
+        Register new file descriptor.
 
         Parameters
         ----------
@@ -210,7 +280,7 @@ class YTStor():
             File descriptor.
         """
 
-        if (0, self.filesize) not in self.avail and self.SET_AV == YTStor.DL_AUD | YTStor.DL_VID:
+        if (0, self.filesize) not in self.avail and self.streaming is False:
 
             if not self.global_dl_lock:
 

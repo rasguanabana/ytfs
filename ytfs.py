@@ -12,7 +12,7 @@ import math
 from enum import Enum
 from copy import deepcopy
 from time import time
-from argparse import ArgumentParser
+from argparse import ArgumentParser, HelpFormatter
 from functools import wraps
 
 from fuse import FUSE, FuseOSError, Operations
@@ -56,11 +56,6 @@ class YTFS(Operations):
 
     """
     Main YTFS class.
-
-    Parameters
-    ----------
-    av : bytes
-        Tell filesystem what kind of data (audio and/or video) it should download.
 
     Attributes
     ----------
@@ -110,12 +105,10 @@ class YTFS(Operations):
 
     __sh_script = b"#!/bin/sh\n"
 
-    def __init__(self, av):
+    def __init__(self):
 
         self.searches = dict()
         self.fds = fd_dict()
-
-        YTStor._setDownloadManner(av)
 
     class PathType(Enum):
 
@@ -184,6 +177,9 @@ class YTFS(Operations):
             else:
                 return YTFS.PathType.invalid
 
+    class PathConvertError(Exception):
+        pass
+
     def __pathToTuple(self, path):
 
         """
@@ -203,12 +199,12 @@ class YTFS(Operations):
 
         Raises
         ------
-        ValueError
+        YTFS.PathConvertError
             When invalid path is given.
         """
 
         if not path or path.count('/') > 2:
-            raise ValueError("Bad path given") # empty or too deep path
+            raise YTFS.PathConvertError("Bad path given") # empty or too deep path
 
         try:
             split = path.split('/')
@@ -216,16 +212,16 @@ class YTFS(Operations):
             raise TypeError("Path has to be string") #path is not a string
 
         if split[0]:
-            raise ValueError("Path needs to start with '/'") # path doesn't start with '/'.
+            raise YTFS.PathConvertError("Path needs to start with '/'") # path doesn't start with '/'.
         del split[0]
 
         try:
             if not split[-1]: split.pop() # given path ended with '/'.
         except IndexError:
-            raise ValueError("Bad path given") # at least one element in split should exist at the moment
+            raise YTFS.PathConvertError("Bad path given") # at least one element in split should exist at the moment
 
         if len(split) > 2:
-            raise ValueError("Path is too deep. Max allowed level is 2") # should happen due to first check, but ...
+            raise YTFS.PathConvertError("Path is too deep. Max allowed level is 2") # should happen due to first check, but ...
 
         try:
             d = split[0]
@@ -237,7 +233,7 @@ class YTFS(Operations):
             f = None
 
         if not d and f:
-            raise ValueError("Bad path given") # filename is present, but directory is not #sheeeeeeiiit
+            raise YTFS.PathConvertError("Bad path given") # filename is present, but directory is not #sheeeeeeiiit
 
         return (d, f)
 
@@ -287,7 +283,7 @@ class YTFS(Operations):
             try:
                 return method(self, self.__pathToTuple(path), *args)
 
-            except ValueError:
+            except YTFS.PathConvertError:
                 raise FuseOSError(errno.EINVAL)
 
         return mod
@@ -523,7 +519,7 @@ class YTFS(Operations):
                 yts.registerHandler(fh)
                 return fh
             else:
-                raise FuseOSError(errno.ENOENT) #FIXME? dunno if it's suitable.
+                raise FuseOSError(errno.EINVAL)
 
         except KeyError:
             return self.fds.push(None) # for control file no association is needed.
@@ -596,22 +592,36 @@ class YTFS(Operations):
         return 0
 
 
-def main(mountpoint, av):
-    FUSE(YTFS(av), mountpoint, foreground=False)
+def main(mountpoint, debug):
+    FUSE(YTFS(), mountpoint, foreground=debug)
 
 if __name__ == '__main__':
     
-    parser = ArgumentParser(description="YTFS - Youtube Filesystem: search and play materials from YouTube using filesystem operations.", epilog="to download both audio and video data, -a and -v flags have to be used simultaneously.")
+    parser = ArgumentParser(description="YTFS - YouTube Filesystem: search and play materials from YouTube using filesystem operations.", epilog="Avoid mixing conflicting -a/-v flags with --format unless you know what you're doing - it might render files unplayable!\nTo download both audio and video data, provide either suitable format (e.g. 'best'; streaming is supported) or -a and -v flags together (whole data is usually downloaded before playing).", formatter_class=lambda prog: HelpFormatter(prog, max_help_position=50))
     parser.add_argument('mountpoint', type=str, nargs=1, help="Mountpoint")
     parser.add_argument('-a', action='store_true', default=False, help="Download audio (default)")
     parser.add_argument('-v', action='store_true', default=False, help="Download video")
     parser.add_argument('-r', action='store_true', default=False, help="RickRoll flag")
+    parser.add_argument('-f', '--format', default=None, help="Set preferred format (exactly like in YoutubeDL). In case of error, YTFS falls back to 'bestvideo[height<=?1080]+bestaudio/best' without any warning!")
+    s_grp = parser.add_mutually_exclusive_group()
+    s_grp.add_argument('-s', action='store_true', default=False, help="Enable streaming whenever available.")
+    s_grp.add_argument('-S', action='store_true', default=False, help="Always download whole data before reading.")
+    parser.add_argument('-d', action='store_true', default=False, help="debug: run in foreground")
 
     x = parser.parse_args()
 
     av = 0b00
-    if x.a: av |= YTStor.DL_AUD
-    if x.v: av |= YTStor.DL_VID
+    if x.a: YTStor.SET_AV |= YTStor.DL_AUD
+    if x.v: YTStor.SET_AV |= YTStor.DL_VID
+
     if x.r: YTStor.RICKASTLEY = True
 
-    main(x.mountpoint[0], av)
+    YTStor.SET_FMT = x.format
+
+    if x.s: YTStor.SET_STREAM = True
+    if x.S: YTStor.SET_STREAM = False
+
+    # do I need to make staticmethod's to set those values? would seem like redundant code to me...
+    # anyway, potential FIXME
+
+    main(x.mountpoint[0], x.d)
