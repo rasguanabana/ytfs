@@ -518,15 +518,15 @@ class YTFS(Operations):
         try:
             yts = self.searches[tid[0]][tid[1]]
 
-            if yts.obtainInfo(): #FIXME coz it's ugly.
-                fh = self.fds.push(yts)
-                yts.registerHandler(fh)
-                return fh
-            else:
-                raise FuseOSError(errno.EINVAL)
-
         except KeyError:
             return self.fds.push(None) # for control file no association is needed.
+
+        if yts.obtainInfo(): #FIXME coz it's ugly.
+            fh = self.fds.push(yts)
+            yts.registerHandler(fh)
+            return fh
+        else:
+            raise FuseOSError(errno.EINVAL)
 
     @_pathdec
     def read(self, tid, length, offset, fh):
@@ -553,7 +553,7 @@ class YTFS(Operations):
         """
 
         try:
-            return self.fds[fh].read(offset, length, fh)
+           return self.fds[fh].read(offset, length, fh)
 
         except AttributeError: # control file
 
@@ -562,7 +562,7 @@ class YTFS(Operations):
             elif tid[1] == " prev":
                 d = False
             else:
-                d = None
+                raise FuseOSError(errno.EINVAL)
 
             try:
                 self.searches[tid[0]].updateResults(d)
@@ -603,10 +603,14 @@ if __name__ == '__main__':
     
     parser = ArgumentParser(description="YTFS - YouTube Filesystem: search and play materials from YouTube using filesystem operations.", epilog="Avoid mixing conflicting -a/-v flags with --format unless you know what you're doing - it might render files unplayable!\nTo download both audio and video data, provide either suitable format (e.g. 'best'; streaming is supported) or -a and -v flags together (whole data is usually downloaded before playing).", formatter_class=lambda prog: HelpFormatter(prog, max_help_position=50))
     parser.add_argument('mountpoint', type=str, nargs=1, help="Mountpoint")
-    parser.add_argument('-a', action='store_true', default=False, help="Download audio (default)")
-    parser.add_argument('-v', action='store_true', default=False, help="Download video")
+
+    avgrp = parser.add_mutually_exclusive_group()
+    avgrp.add_argument('-a', action='store_true', default=False, help="Download only audio")
+    avgrp.add_argument('-v', action='store_true', default=False, help="Download only video")
+
+    parser.add_argument('-f', default='10000', help="Preferred video format as video height (e.g. 720). Ignored if -a specified.")
     parser.add_argument('-r', action='store_true', default=False, help="RickRoll flag")
-    parser.add_argument('-f', '--format', default=None, help="Set preferred format (exactly like in YoutubeDL). In case of error, YTFS falls back to 'bestvideo[height<=?1080]+bestaudio/best' without any warning!")
+
     s_grp = parser.add_mutually_exclusive_group()
     s_grp.add_argument('-s', action='store_true', default=False, help="Enable streaming whenever available.")
     s_grp.add_argument('-S', action='store_true', default=False, help="Always download whole data before reading.")
@@ -614,16 +618,19 @@ if __name__ == '__main__':
 
     x = parser.parse_args()
 
-    av = 0b00
-    if x.a: YTStor.SET_AV |= YTStor.DL_AUD
-    if x.v: YTStor.SET_AV |= YTStor.DL_VID
+    if x.a:
+        YTStor.preferences['audio'] = True
+        YTStor.preferences['video'] = False
+    elif x.v:
+        YTStor.preferences['video'] = True
+        YTStor.preferences['audio'] = False
 
-    if x.r: YTStor.RICKASTLEY = True
+    if x.r: YTStor.rickastley = True
 
-    YTStor.SET_FMT = x.format
-
-    if x.s: YTStor.SET_STREAM = True
-    if x.S: YTStor.SET_STREAM = False
+    if x.s:
+        YTStor.preferences['stream'] = True
+    elif x.S:
+        YTStor.preferences['stream'] = False
 
     # do I need to make staticmethod's to set those values? would seem like redundant code to me...
     # anyway, potential FIXME

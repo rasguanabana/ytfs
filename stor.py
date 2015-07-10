@@ -9,7 +9,7 @@ import tempfile
 from time import time, sleep
 from calendar import timegm
 from datetime import datetime
-from threading import Thread, Event
+from threading import Lock
 
 from range_t import range_t
 
@@ -44,16 +44,14 @@ class Downloader():
             Method does not return; data is written directly to `yts` object.
         """
 
-        av = yts.opts.get('av', yts.SET_AV)
-
-        if av == YTStor.DL_AUD | YTStor.DL_VID and yts.url.get("audio") and yts.url.get("video") and not yts.streaming:
+        if yts.preferences['audio'] and yts.preferences['video'] and isinstance(yts.url, tuple) and not yts.preferences['stream']:
             #condition for merging.
 
             with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as d, tempfile.NamedTemporaryFile(prefix='a') as a, tempfile.NamedTemporaryFile(prefix='v') as v:
                 # after with statement, files - save d - shall be removed
 
-                v.write(yts.r_session.get(yts.url['video']).content)
-                a.write(yts.r_session.get(yts.url['audio']).content)
+                v.write(yts.r_session.get(yts.url[0]).content)
+                a.write(yts.r_session.get(yts.url[1]).content)
 
                 PP = youtube_dl.postprocessor.FFmpegMergerPP(yts.ytdl)
                 PP.run({'filepath': d.name, '__files_to_merge': (v.name, a.name)}) # merge
@@ -64,6 +62,7 @@ class Downloader():
 
                 yts.data.write( d.read() )
                 yts.data.flush()
+
                 yts.filesize = os.path.getsize(_d)
 
                 yts.avail += (0, yts.filesize)
@@ -72,19 +71,9 @@ class Downloader():
 
         else: # no merging
 
-            if av == YTStor.DL_AUD:
-                print('aud')
-                url = yts.url['audio']
-            elif av == YTStor.DL_VID:
-                print('vid')
-                url = yts.url['video']
-            elif av == YTStor.DL_VID | YTStor.DL_AUD:
-                print('full')
-                url = yts.url['full']
+            if yts.preferences['stream'] is False: # preload
 
-            if yts.streaming is False: # preload
-
-                yts.data.write(yts.r_session.get(url).content)
+                yts.data.write(yts.r_session.get(yts.url).content)
                 yts.data.flush()
 
                 yts.avail += (0, yts.filesize)
@@ -93,7 +82,8 @@ class Downloader():
 
                 hr = (needed_range[0], needed_range[1] - 1)
 
-                get = yts.r_session.get(url, headers={'Range': 'bytes=' + '-'.join(str(i) for i in hr)})
+                get = yts.r_session.get(yts.url, headers={'Range': 'bytes=' + '-'.join(str(i) for i in hr)})
+
                 yts.data.seek(hr[0])
                 yts.data.write(get.content)
                 yts.data.flush()
@@ -114,13 +104,8 @@ class YTStor():
     ----------
     data : SpooledTemporaryFile
         Temporary file object - actual data is stored here.
-    streaming : bool
-        Whether to stream content or download all at once.
-    global_dl_lock : bool
-        Global download lock. Used when merge of audio and video is needed because all data has to be downloaded
-        at once.
-    thread : list
-        List of running ``Downloader`` threads.
+    closed : bool
+        ``True`` if ``data`` was closed.
     avail : range_t
         Object saying how much data we have.
     safe_range : range_t
@@ -131,95 +116,73 @@ class YTStor():
         download, isn't already being downloaded by another thread.
     filesize : int
         Total data size. Not yet downloaded data is also considered.
+    rickastley : bool
+        Make every video rickroll
     r_session : requests.Session
         Object that holds HTTP session. Thanks to that, we avoid useless TCP window size negotiations whenever we
         start a download.
     yid : str
         YouTube id of a video which this object represents.
-    opts : dict
-        Options provided to ``__init__``
-    url : dict
-        A dictionary containing urls to content. Keys:
-        `video`: video url,
-        `audio`: audio url,
-        `full`:  url to movie with both audio and video.
-        Values may be ``None`` if url is not present.
-
-    DL_VID : int
-        Constant, which written to SET_AV, will instruct object to download video data.
-    DL_AUD : int
-        Constant, which written to SET_AV, will instruct object to download audio data.
-    SET_AV : int
-        Attribute wich stores information about what kind of data object will download. It consists of combination of
-        DL_VID and DL_AUD. DL_AUD is default value.
-
-    SET_STREAM : bool or None
-        ``True``: try streaming whenever possible (quality might be lower).
-        ``False``: always load whole data before reading.
-        ``None``: decide automatically.
-
-    SET_FMT : str or None
-        Custom, yet global, user specified format. ``None`` by default.
-    FALLBACK : str
-        If custom format isn't found or not specified then this will be chosen.
-
-    RICKASTLEY : bool
-        Make every video rickroll
+    preferences : dict
+        Current object preferences.
+    url : str or tuple
+        Url to file. If tuple, then merging is needed; indices: 0: video, 1: audio.
 
     Parameters
     ----------
     yid : str
         YouTube video id.
+    opts : dict
+        Options that will override globally set preferences.
     """
 
-    DL_VID = 0b10
-    DL_AUD = 0b01
-    SET_AV = 0b01
+    preferences = {
+        "audio": True,
+        "video": True,
+        "stream": True,
+        "get_info_on_init": False
+    }
 
-    SET_STREAM = None
-
-    SET_FMT = None
-    FALLBACK_FMT = "bestvideo[height<=?1080]+bestaudio/best"
-
-    RICKASTLEY = False
+    rickastley = False
 
     def __init__(self, yid, opts=dict()):
 
-        if self.RICKASTLEY:
+        if self.rickastley:
             yid = "dQw4w9WgXcQ" #trolololo
 
         if not isinstance(yid, str) or len(yid) != 11:
             raise ValueError("yid expected to be valid Youtube movie identifier") #FIXME
 
         self.data = tempfile.SpooledTemporaryFile()
-        self.global_dl_lock = False
-        self.thread = []
+        self.lock = Lock() # lock to prevent threads from colliding
 
         self.avail = range_t()
         self.safe_range = range_t()
         self.processing_range = range_t()
-        self.spooled = 1;
 
         self.filesize = 4096
 
         self.atime = int(time())
         try:
-            ctime = timegm(datetime.strptime(opts['pub_date'], "%Y-%m-%dT%H:%M:%S.%fZ").timetuple())
+            # convert from iso 8601
+            self.ctime = timegm(datetime.strptime(opts['pub_date'], "%Y-%m-%dT%H:%M:%S.%fZ").timetuple())
         except KeyError:
-            ctime = self.atime
-
-        self.ctime = ctime
+            self.ctime = self.atime
 
         self.r_session = requests.Session()
 
         self.yid = yid
-        self.opts = opts
 
-        self.url = dict()
+        try: self.preferences['audio'] = opts['audio']
+        except KeyError: pass
+        try: self.preferences['video'] = opts['video']
+        except KeyError: pass
+        try: self.preferences['stream'] = opts['stream']
+        except KeyError: pass
+        try: self.preferences['get_info_on_init'] = opts['get_info_on_init']
+        except KeyError: pass
 
-        fmt = "/".join(f for f in [opts.get('format'), self.SET_FMT, self.FALLBACK_FMT] if f and isinstance(f, str))
-
-        self.ytdl = youtube_dl.YoutubeDL({"quiet": True, "format": fmt})
+        self.ytdl = youtube_dl.YoutubeDL({"quiet": True, "format": "bestvideo+bestaudio"})
         self.ytdl.add_info_extractor( self.ytdl.get_info_extractor("Youtube") )
 
     def obtainInfo(self):
@@ -230,55 +193,32 @@ class YTStor():
 
         info = self.ytdl.extract_info(self.yid, download=False)
 
-        # url:
-
-        want_stream = self.opts.get('stream', self.SET_STREAM) # get value from opts, get SET_STREAM if not present.
-        av = self.opts.get('av', self.SET_AV)
-
-        get_filesize = None # whether to obtain filesize by HEAD http request
-
-        try:
-            if av == self.DL_AUD | self.DL_VID and want_stream and not tuple(f for f in info['formats'] if "DASH" not in f['format']):
-                # user selected audio+video, prefers streaming and streamable formats are available
-
-                self.streaming = True
-
-                fmts = [info['formats'][-1]] # `best` equivalent. TODO make sure it's true.
-                self.filesize = self.r_session.head(fmts['url'])['content-length']
-
-            else:
-                self.streaming = False if want_stream is False else None # False if False, None if True or None.
-
-                fmts = info['requested_formats'] # got separate audio and video.
-                self.filesize = fmts[2 - av]['filesize']
-
-        except KeyError:
-
-            if "+" in info['format']: # something went wrong, requested_formats should've been accessible
-                raise ValueError #FIXME?
-
-            fmts = [info]
-            self.filesize = info['filesize']
-
-        for el in fmts:
-
-            if "audio" in el['format']:
-                self.url['audio'] = el['url']
-
-            elif "video" in el['format']:
-                self.url['video'] = el['url']
-
-            elif len(fmts) == 1:
-                self.url['full'] = el['url']
-
-            else:
-                raise ValueError #FIXME? not sure if ValueError suits it.
-
-        if (av == YTStor.DL_AUD and 'audio' in self.url) or (av == YTStor.DL_VID and 'video' in self.url) or (av == YTStor.DL_AUD | YTStor.DL_VID and (('audio' in self.url and 'video' in self.url) or 'full' in self.url)):
+        if not self.preferences['stream']:
+            self.url = (info['requested_formats'][0]['url'], info['requested_formats'][1]['url'])
             return True
+
+        # else:
+        for f in info['formats']:
+            if 'filesize' not in f:
+                f['filesize'] = 'x' # next line won't fail, str for the sorting sake.
+
+        # - 10000 for easy sorting - we'll get best quality and lowest filsize
+        aud = {(10000 - int(f['abr']),    f['filesize'], f['url']) for f in info['formats'] if 'audio' in f['format']}
+        vid = {(10000 - int(f['height']), f['filesize'], f['url']) for f in info['formats'] if 'video' in f['format']}
+        full= {(10000 - int(f['height']), f['filesize'], f['url']) for f in info['formats'] if 'DASH' not in f['format']}
+
+        if self.preferences['audio'] and self.preferences['video']: fm = min(full)
+        elif self.preferences['audio']: fm = min(aud)
+        elif self.preferences['video']: fm = min(vid)
+
+        self.url = fm[2]
+        if fm[1] == 'x':
+            self.filesize = int(self.r_session.head(self.url).headers['content-length'])
         else:
-            return False
-    
+            self.filesize = int(fm[1])
+
+        return True
+
     def registerHandler(self, fh): # Do I even need that? possible FIXME.
 
         """
@@ -292,23 +232,16 @@ class YTStor():
 
         self.atime = int(time()) # update access time
 
-        if (0, self.filesize) not in self.avail and self.streaming is False:
+        self.lock.acquire()
 
-            if not self.global_dl_lock:
+        try:
+            if (0, self.filesize) not in self.avail and self.preferences['stream'] is False:
 
-                self.global_dl_lock = True
+                Downloader.fetch(self, None, fh) # lock forces other threads to wait, so fetch will perform just once.
 
-                #try:
-                Downloader.fetch(self, None, fh)
-                #except:
-                #    self.avail.waitings[(0,1)].set()
-                #    del self.avail.waitings[(0,1)]
+        finally:
+            self.lock.release()
 
-                self.global_dl_lock = False
-
-            elif self.global_dl_lock:
-                self.avail.setWaiting(fh) # wait for anything, beacause all data is downloaded at once. fh is unique.
-        
     def read(self, offset, length, fh):
 
         """
@@ -317,10 +250,10 @@ class YTStor():
 
         Parameters
         ----------
-        start : int
-            Left boundary of desired data range.
-        end : int
-            Right boundary of desired data range.
+        offset : int
+            Read offset
+        length : int
+            Length of data to read.
         fh : int
             File descriptor.
         """
@@ -332,32 +265,32 @@ class YTStor():
         if safe[1] > self.filesize: safe[1] = self.filesize
         safe = tuple(safe)
 
-        need = [ safe[0] - ( 8 * length ), safe[1] + ( 16 * length ) ]
-        if need[0] < 0: need[0] = 0
-        if need[1] > self.filesize: need[1] = self.filesize
-        need = tuple(need)
+        ##need = [ safe[0] - ( 8 * length ), safe[1] + ( 16 * length ) ]
+        ##if need[0] < 0: need[0] = 0
+        ##if need[1] > self.filesize: need[1] = self.filesize
+        ##need = tuple(need)
 
-        ws = range_t()
-        if self.processing_range.contains(need): # needed range overlaps with currently processed.
+        ##ws = range_t()
+        ##if self.processing_range.contains(need): # needed range overlaps with currently processed.
 
-            ws += self.processing_range - (self.processing_range - need) # to make that simplier, range_t should be updated FIXME
+        ##    ws += self.processing_range - (self.processing_range - need) # to make that simplier, range_t should be updated FIXME
 
-        if current not in self.safe_range: # data is read outside of ``self.safe_range`` - we have to download a bit.
+        ##if current not in self.safe_range: # data is read outside of ``self.safe_range`` - we have to download a bit.
 
-            dls = range_t({need}) - self.avail # missing data range.
-            dls -= ws # we substract ranges, that we wait for, because somebody else takes care of them.
+        ##    dls = range_t({need}) - self.avail # missing data range.
+        ##    dls -= ws # we substract ranges, that we wait for, because somebody else takes care of them.
 
-            self.processing_range += dls
+        ##    self.processing_range += dls
 
-            for r in dls.toset():
-                _t = Thread( target=Downloader.fetch, args=(self, r, fh) ) # download
-                _t.daemon = True
-                _t.start()
-                self.thread.append(_t)
+        ##    for r in dls.toset():
+        ##        _t = Thread( target=Downloader.fetch, args=(self, r, fh) ) # download
+        ##        _t.daemon = True
+        ##        _t.start()
+        ##        self.thread.append(_t)
 
-            self.avail.setWaiting(need) # wait for data we need to be ready.
+        ##    self.avail.setWaiting(need) # wait for data we need to be ready.
 
-            self.safe_range += safe
+        ##    self.safe_range += safe
 
             #if offset > self.spooled * 2 * 1024**2: # zapisujemy dane na dysk
             #    self.data.rollover()
@@ -365,17 +298,25 @@ class YTStor():
 
         # done, we can return data:
 
+        self.lock.acquire()
+
+        try:
+            dl = range_t({safe}) - self.avail
+
+            for r in dl.toset():
+                Downloader.fetch(self, r, fh) # download is, let's say, atomic thanks to lock
+
+        finally:
+            self.lock.release()
+
         self.data.seek(offset)
         return self.data.read(length) #FIXME - error handling
 
     def clean(self):
 
         """
-        Clear data. Explicitly close ``self.data``. Additionaly, call join() on threads started earlier.
+        Clear data. Explicitly close ``self.data``.
         """
 
         self.data.close()
-
-        for t in self.thread:
-            t.join(1)
-        #TODO mark object as unusable.
+        self.closed = True

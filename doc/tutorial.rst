@@ -8,13 +8,13 @@ To mount YTFS in a chosen directory, one should execute ``ytfs.py`` and provide 
 
 Avalaible options:
 
-|   **-a** : Download audio (default)
-|   **-v** : Download video
-|   **-r** : RickRoll flag
+|   **-a** : Download audio only.
+|   **-v** : Download video only.
+|   **-r** : RickRoll flag.
+|   **-P** : Load whole data before reading (disables streaming preference). Useful for obtaining heighest video quality.
+|   **-d** : Debug - run YTFS in foreground.
 
-.. important:: YTFS choses best quality available. Format selection will be implemented in the future.
-
-Flags can be used simultaneously, which will cause download of video and audio. In such case, before read from a file all data will be obtained, then audio and video will be merged. When only audio or only video is selected, then download is performed dynamically.
+.. important:: By default, YTFS provides streamable full movie data. Most probably, it won't be in the highest quality available. For best quality -P flag may be needed.
 
 .. warning:: Some programs may have problems with opening full files with video and audio. They can fail after necessity of waiting for a long time after ``open`` call.
 

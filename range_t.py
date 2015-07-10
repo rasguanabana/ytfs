@@ -3,7 +3,6 @@ Module that provides range_t class which offers a simple and compact way of repr
 """
 
 from copy import deepcopy
-from threading import Event
 
 class range_t():
 
@@ -16,8 +15,6 @@ class range_t():
     ----------
     __has : set
         Set of subranges.
-    waitings : dict
-        Dictionary of ranges for which threads can wait. Key - range to wait for, value - ``threads.Event`` object.
 
     Parameters
     ----------
@@ -28,7 +25,6 @@ class range_t():
     def __init__(self, initset=set()):
 
         self.__has = set()
-        self.waitings = dict()
 
         if not isinstance(initset, set):
             raise TypeError("Expected set of tuples")
@@ -82,8 +78,6 @@ class range_t():
                 ret.append( (begin, end) )
 
         self.__has = set(ret)
-
-        self.checkWaitings() # check if a subrange that someone waits for has appeared.
 
     def __val_convert(self, val): # maybe I should make a decorator from this.
 
@@ -339,35 +333,3 @@ class range_t():
             raise ValueError("Expected range_t to compare.")
 
         return self.__has == val.toset()
-
-    def checkWaitings(self):
-
-        """
-        Check if any ranges from ``self.waitings`` haven't been added to the object. If so, then emit an event and delete
-        subrange form a dictionary.
-        """
-
-        to_rem = set()
-        for e in (e for e in self.waitings if e in self):
-            s = self.waitings[e].set()
-
-        for x in to_rem:
-            del self.waitings[x]
-
-    def setWaiting(self, val):
-        
-        """
-        Wait for `val` addition into this object.
-
-        Parameters
-        ----------
-        val : int or tuple or list or range
-            Integer or range which we want to wait for.
-        """
-
-        conv = self.__val_convert(val) # conversion.
-
-        if conv in self: return # already here :)
-
-        self.waitings[conv] = Event() # create an event and ...
-        self.waitings[conv].wait() # ... wait.
