@@ -324,6 +324,10 @@ class YTFS(Operations):
 
             st['st_size'] = self.searches[ tid[0] ][ tid[1] ].filesize
 
+            st['st_ctime'] = self.searches[ tid[0] ][ tid[1] ].ctime
+            st['st_mtime'] = st['st_ctime']
+            st['st_atime'] = self.searches[ tid[0] ][ tid[1] ].atime
+
         elif pt is self.PathType.ctrl:
 
             st['st_mode'] = stat.S_IFREG | 0o555 # correct? (FIXME?)

@@ -7,6 +7,8 @@ import youtube_dl
 import requests
 import tempfile
 from time import time, sleep
+from calendar import timegm
+from datetime import datetime
 from threading import Thread, Event
 
 from range_t import range_t
@@ -200,6 +202,14 @@ class YTStor():
 
         self.filesize = 4096
 
+        self.atime = int(time())
+        try:
+            ctime = timegm(datetime.strptime(opts['pub_date'], "%Y-%m-%dT%H:%M:%S.%fZ").timetuple())
+        except KeyError:
+            ctime = self.atime
+
+        self.ctime = ctime
+
         self.r_session = requests.Session()
 
         self.yid = yid
@@ -279,6 +289,8 @@ class YTStor():
         fh : int
             File descriptor.
         """
+
+        self.atime = int(time()) # update access time
 
         if (0, self.filesize) not in self.avail and self.streaming is False:
 

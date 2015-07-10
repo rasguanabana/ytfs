@@ -169,7 +169,7 @@ class YTActions():
         """
 
         # this choses data we need.
-        files = lambda x: {i['snippet']['title'].replace('/', '\\'): YTStor(i['id']['videoId']) for i in x['items']}
+        files = lambda x: {i['snippet']['title'].replace('/', '\\'): YTStor(i['id']['videoId'], opts={'pub_date': i['snippet']['publishedAt']}) for i in x['items']}
 
         try:
             if self.adj_tokens[forward] is None: # in case someone would somehow cross boundary.
