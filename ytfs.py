@@ -601,19 +601,18 @@ def main(mountpoint, debug):
 
 if __name__ == '__main__':
     
-    parser = ArgumentParser(description="YTFS - YouTube Filesystem: search and play materials from YouTube using filesystem operations.", epilog="Avoid mixing conflicting -a/-v flags with --format unless you know what you're doing - it might render files unplayable!\nTo download both audio and video data, provide either suitable format (e.g. 'best'; streaming is supported) or -a and -v flags together (whole data is usually downloaded before playing).", formatter_class=lambda prog: HelpFormatter(prog, max_help_position=50))
+    parser = ArgumentParser(description="YTFS - YouTube Filesystem: search and play materials from YouTube using filesystem operations.", epilog="Streaming may not work if your player will read whole file into its buffer.", formatter_class=lambda prog: HelpFormatter(prog, max_help_position=50))
     parser.add_argument('mountpoint', type=str, nargs=1, help="Mountpoint")
 
     avgrp = parser.add_mutually_exclusive_group()
     avgrp.add_argument('-a', action='store_true', default=False, help="Download only audio")
     avgrp.add_argument('-v', action='store_true', default=False, help="Download only video")
 
-    parser.add_argument('-f', default='10000', help="Preferred video format as video height (e.g. 720). Ignored if -a specified.")
+    #parser.add_argument('-f', default='10000', help="Preferred video format as video height (e.g. 720). Ignored if -a specified.")
     parser.add_argument('-r', action='store_true', default=False, help="RickRoll flag")
 
     s_grp = parser.add_mutually_exclusive_group()
-    s_grp.add_argument('-s', action='store_true', default=False, help="Enable streaming whenever available.")
-    s_grp.add_argument('-S', action='store_true', default=False, help="Always download whole data before reading.")
+    s_grp.add_argument('-P', action='store_true', default=False, help="Always download whole data before reading. Useful for obtaining heighest video quality.")
     parser.add_argument('-d', action='store_true', default=False, help="debug: run in foreground")
 
     x = parser.parse_args()
@@ -627,9 +626,7 @@ if __name__ == '__main__':
 
     if x.r: YTStor.rickastley = True
 
-    if x.s:
-        YTStor.preferences['stream'] = True
-    elif x.S:
+    elif x.P:
         YTStor.preferences['stream'] = False
 
     # do I need to make staticmethod's to set those values? would seem like redundant code to me...
