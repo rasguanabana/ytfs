@@ -224,5 +224,5 @@ class YTActions():
 
         for s in self.visible_files.values():
             s.clean()
-        for s in [sub[x] for sub in self.avail_files.values() for x in sub]: # Double list comprehensions aren't very
+        for s in [sub[1][x] for sub in self.avail_files.values() for x in sub[1]]: # Double list comprehensions aren't very
             s.clean()                                                        # readable...
