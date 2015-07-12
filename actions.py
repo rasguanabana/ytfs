@@ -194,7 +194,7 @@ class YTActions():
 
         if len(self.avail_files) > 4:
             pop = self.avail_files.popitem(False) # get rid of the oldest data.
-            for s in pop.values(): s.clean()
+            for s in pop[1][1].values(): s.clean()
 
         adj_t = deepcopy(self.adj_tokens) # this will we write to avail_files, now we update self.adj_tokens.
 

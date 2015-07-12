@@ -20,6 +20,34 @@ from fuse import FUSE, FuseOSError, Operations
 #from stor import YTStor
 from actions import YTActions, YTStor
 
+
+#######################
+##### DIRTY PATCH #####
+#######################
+
+from ctypes import create_string_buffer, memmove
+
+def listxattr_FIX(self, path, namebuf, size):
+    attrs = self.operations('listxattr', path.decode(self.encoding)) or ''
+    ret = '\x00'.join(attrs).encode(self.encoding) + '\x00'.encode('ascii') # <= fixed here
+
+    retsize = len(ret)
+    # allow size queries
+    if not namebuf: return retsize
+
+    # do not truncate
+    if retsize > size: return -errno.ERANGE
+
+    buf = create_string_buffer(ret, retsize)
+    memmove(namebuf, buf, retsize)
+
+    return retsize
+
+FUSE.listxattr = listxattr_FIX
+
+# and that's it.
+
+
 class fd_dict(dict):
 
     """``dict`` extension, which finds the lowest unused descriptor and associates it with an ``YTStor`` object."""
