@@ -131,7 +131,7 @@ class YTFS(Operations):
         'st_ctime': 0
     }
 
-    __sh_script = b"#!/bin/sh\n"
+    __sh_script = b"#!/bin/sh\necho 1 > $0\n"
 
     def __init__(self):
 
@@ -358,7 +358,7 @@ class YTFS(Operations):
 
         elif pt is self.PathType.ctrl:
 
-            st['st_mode'] = stat.S_IFREG | 0o555 # correct? (FIXME?)
+            st['st_mode'] = stat.S_IFREG | 0o774
             st['st_nlink'] = 1
             st['st_size'] = len(self.__sh_script)
 
@@ -461,7 +461,7 @@ class YTFS(Operations):
 
         self.searches[new[0]] = YTActions(new[0])
         self.searches[new[0]].updateResults()
-        
+
         try:
             del self.searches[old[0]]
 
@@ -537,8 +537,8 @@ class YTFS(Operations):
         if pt is not self.PathType.file and pt is not self.PathType.ctrl:
             raise FuseOSError(errno.EINVAL)
 
-        if flags & os.O_WRONLY or flags & os.O_RDWR:
-            raise FuseOSError(errno.EROFS)
+        if pt is not self.PathType.ctrl and (flags & os.O_WRONLY or flags & os.O_RDWR):
+            raise FuseOSError(errno.EPERM)
 
         if not self.__exists(tid):
             raise FuseOSError(errno.ENOENT)
@@ -592,15 +592,48 @@ class YTFS(Operations):
             else:
                 raise FuseOSError(errno.EINVAL)
 
-            try:
-                self.searches[tid[0]].updateResults(d)
-            except KeyError:
-                raise FuseOSError(errno.EINVAL) # sth went wrong...
-
             return self.__sh_script[offset:offset+length]
 
         except KeyError: # descriptor does not exist.
             raise FuseOSError(errno.EBADF)
+
+    def truncate(*args): return 0 # throws EROFS by default, so write fails.
+    @_pathdec
+    def write(self, tid, data, offset, fh):
+
+        """
+        Write operation. Applicable only for control files - updateResults is called.
+
+        Parameters
+        ----------
+        tid : str
+            Path to file. Original `path` argument is converted to tuple identifier by ``_pathdec`` decorator.
+        data : bytes
+            Ignored.
+        offset : int
+            Ignored.
+        fh : int
+            File descriptor.
+
+        Returns
+        -------
+        int
+            Length of data written.
+        """
+
+        if tid[1] == " next":
+            d = True
+        elif tid[1] == " prev":
+            d = False
+        else:
+            raise FuseOSError(errno.EPERM)
+
+        try:
+            self.searches[tid[0]].updateResults(d)
+        except KeyError:
+            raise FuseOSError(errno.EINVAL) # sth went wrong...
+
+        return len(data)
 
     @_pathdec
     def release(self, tid, fh):
