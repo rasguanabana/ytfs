@@ -112,8 +112,7 @@ class YTFS(Operations):
         Key: descriptor.
         Value: ``YTStor`` object for given file.
     __sh_script : bytes
-        Bytes returned during control file read (empty shell script). System has to have impression of executing
-        something. The actual operation is performed by YTFS during control file opening.
+        Control file contents.
     """
 
     st = {
@@ -361,6 +360,9 @@ class YTFS(Operations):
             st['st_mode'] = stat.S_IFREG | 0o774
             st['st_nlink'] = 1
             st['st_size'] = len(self.__sh_script)
+
+        elif pt is self.PathType.main:
+            st['st_mode'] = stat.S_IFDIR | 0o774
 
         st['st_blocks'] = math.ceil(st['st_size'] / st['st_blksize'])
 
