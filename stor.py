@@ -145,7 +145,7 @@ class YTStor():
 
     rickastley = False
 
-    def __init__(self, yid, opts=dict()):
+    def __init__(self, yid, pub_date, opts=dict()):
 
         if self.rickastley:
             yid = "dQw4w9WgXcQ" #trolololo
@@ -165,7 +165,7 @@ class YTStor():
         self.atime = int(time())
         try:
             # convert from iso 8601
-            self.ctime = timegm(datetime.strptime(opts['pub_date'], "%Y-%m-%dT%H:%M:%S.%fZ").timetuple())
+            self.ctime = timegm(datetime.strptime(pub_date, "%Y-%m-%dT%H:%M:%S.%fZ").timetuple())
         except KeyError:
             self.ctime = self.atime
 

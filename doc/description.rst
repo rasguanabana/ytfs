@@ -35,6 +35,12 @@ Example::
 
 Besides files that are search results, *next* and *prev* (both start with space character!) may appear. Those are executable control files, whose execution will load next or previous search results into directory.
 
+User can also provide advanced search parameters in the directory name::
+
+    larry@localhost /tmp/ytfs $ mkdir "foo bar channel:baz max:20 after:2010-01-01 before:2012-12-31"
+
+See :ref:`adv_s_params` for more details.
+
 Directory removal will clean given search and will delete downloaded data.
 
 Movies playback

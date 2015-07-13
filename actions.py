@@ -9,6 +9,7 @@ from stor import YTStor
 
 from copy import copy, deepcopy
 from collections import OrderedDict
+from urllib.parse import urlencode
 
 class YTActions():
 
@@ -35,32 +36,209 @@ class YTActions():
     vf_iter : obj
         Here the ``YTActions`` obejct stores an iterator allowing for current directory content listing. Used by
         ``__iter__`` and ``__next__`` methods.
+    search_params : dict
+        Additional search params for __search.
+    yts_opts : dict
+        Custom options passed to YTStor objects created in this class.
+    api_key : str
+        YouTube API key.
 
     Parameters
     ----------
     search_query : str
         Currently used search phrase.
-    max_results : int, optional
-        Number of results for a single "page".
     """
 
-    avail_files = OrderedDict()
-    visible_files = None
-    adj_tokens = {False: None, True: None}
+    api_key = "AIzaSyCPOg5HQfHayQH6mRu4m2PMGc3eHd5lllg"
 
-    vf_iter = None
-
-    def __init__(self, search_query, max_results = 10):
+    def __init__(self, search_query):
 
         if not isinstance(search_query, str):
             raise ValueError("Expected str for 1st parameter (search_query).")
-        if not isinstance(max_results, int):
-            raise ValueError("Expected int for 2nd parameter (max_results).")
 
-        self.search_query = search_query
-        self.max_results = max_results
+        self.avail_files = OrderedDict()
+        self.visible_files = None
+        self.adj_tokens = {False: None, True: None}
 
-    def __search(self, pt=None):
+        self.vf_iter = None
+
+        self.search_params = {"maxResults": 10}
+        self.yts_opts = dict()
+
+        parsed = self.__searchParser(search_query)
+        self.search_params.update(parsed[0])
+        self.yts_opts = parsed[1]
+
+        if 'audio' in parsed[1] and 'video' not in parsed[1]: self.yts_opts['video'] = False
+        if 'video' in parsed[1] and 'audio' not in parsed[1]: self.yts_opts['audio'] = False
+
+        self.__getChannelId()
+
+        if parsed[0].get("publishedBefore"): self.search_params["publishedBefore"] += "T00:00:00Z"
+        if parsed[0].get("publishedAfter"): self.search_params["publishedAfter"] += "T00:00:00Z"
+
+    def __getChannelId(self):
+        
+        """
+        Obtain channel id for channel name, if present in ``self.search_params``.
+        """
+
+        if not self.search_params.get("channelId"):
+            return
+
+        api_fixed_url = "https://www.googleapis.com/youtube/v3/channels?part=id&maxResults=1&fields=items%2Fid&"
+        url = api_fixed_url + urlencode({"key": self.api_key, "forUsername": self.search_params["channelId"]})
+        get = requests.get(url).json()
+
+        try:
+            self.search_params["channelId"] = get['items'][0]['id']
+            return # got it
+
+        except IndexError:
+            pass # try searching now...
+
+        api_fixed_url = "https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&fields=items%2Fid&"
+        url = api_fixed_url + urlencode({"key": self.api_key, "q": self.search_params['channelId']})
+        get = requests.get(url).json()
+
+        try:
+            self.search_params["channelId"] = get['items'][0]['id']['channelId']
+
+        except IndexError:
+            del self.search_params["channelId"] # channel not found
+
+    def __searchParser(self, query):
+
+        """
+        Parse `query` for advanced search options.
+
+        Parameters
+        ----------
+        query : str
+            Search query to parse. Besides a search query, user can specify additional search parameters and YTFS
+            specific options. Syntax:
+            * Additional search parameters: ``option:value``. if `value` contains spaces, then surround it with
+            parentheses. Available parameters: `channel`, `max`, `before`, `after`.
+            * YTFS options: specify options between ``[`` and ``]``. Available options: `a`, `v`, `P`, `s`. If an
+            option takes a parameter, then specify it beetween parentheses.
+
+            Examples: ``channel:foo search query``, ``my favourite music [a]``,
+            ``channel:(the famous funny cats channel) [v(240)P] funny cats max:20``.
+
+            Invalid parameters/options are ignored.
+
+        Returns
+        -------
+        params : tuple
+            Tuple: 0 - dictionary of url GET parameters; 1 - dictionary of YTStor options.
+        """
+
+        ret = dict()
+
+        parse_params = True
+
+        buf = ""
+        ptr = ""
+
+        p_avail = ("channel", "max", "before", "after")
+
+        opts = dict()
+        
+        par_open = False
+
+        translate = {
+            'a': 'audio',
+            'v': 'video',
+            's': 'stream',
+            'P': 'stream',
+            'max': 'maxResults',
+            'channel': 'channelId',
+            'before': 'publishedBefore',
+            'after': 'publishedAfter',
+            '': 'q'
+        }
+
+        for i in query+' ':
+
+            if parse_params:
+
+                if not par_open:
+
+                    if i == ' ': # flush buf
+
+                        try:
+                            if ret.get(translate[ptr]):
+                                ret[ translate[ptr] ] += ' '
+                            else:
+                                ret[ translate[ptr] ] = ''
+
+                            ret[ translate[ptr] ] += buf
+
+                        except KeyError:
+                            pass
+
+                        ptr = ""
+                        buf = ""
+
+                    elif i == ':' and buf in p_avail:
+
+                        ptr = buf
+                        buf = ""
+
+                    elif not buf and i == '[': # buf must be empty
+
+                        parse_params = False
+                        ptr = ""
+
+                    elif i != '(':
+                        buf += i
+
+                elif not (par_open == 1 and i == ')'):
+                    buf += i
+
+                if i == '(': par_open += 1
+                if par_open > 0 and i == ')': par_open -= 1
+
+
+            else:
+
+                if i == ']':
+
+                    parse_params = True
+                    par_open = False
+                    ptr = ""
+                    buf = ""
+
+                elif ptr and not par_open and i == '(':
+                    par_open = True
+
+                elif par_open:
+
+                    if i == ')':
+
+                        try:
+                            opts[ translate[ptr] ] = buf
+                        except KeyError:
+                            pass
+
+                        par_open = False
+                        buf = ""
+
+                    else:
+                        buf += i
+
+                elif i.isalpha():
+
+                    ptr = i
+
+                    try:
+                        opts[ translate[ptr] ] = not i.isupper()
+                    except KeyError:
+                        pass
+
+        return (ret, opts)
+
+    def __search(self, pt=""):
 
         """
         Method responsible for searching using YouTube API.
@@ -76,17 +254,21 @@ class YTActions():
             Parsed JSON returned by YouTube API.
         """
 
-        api_fixed_url = "https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&fields=items(id%2Ckind%2Csnippet)%2CnextPageToken%2CprevPageToken"
-        api_key = "AIzaSyCPOg5HQfHayQH6mRu4m2PMGc3eHd5lllg"
+        if not self.search_params.get('q') and not self.search_params.get('channelId'):
+            return {'items': []} # no valid query - no results.
 
-        url = "{0}&key={1}&maxResults={2}&q={3}&pageToken=".format(api_fixed_url, api_key, self.max_results, self.search_query)
+        api_fixed_url = "https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&fields=items(id%2Ckind%2Csnippet)%2CnextPageToken%2CprevPageToken&"
 
-        try:
-            url += pt
-        except TypeError:
-            pass
+        d = {"key": self.api_key, "pageToken": pt}
+        d.update(self.search_params)
+        url = api_fixed_url + urlencode(d)
 
-        return requests.get(url).json() #FIXME? something can go wrong here...
+        get = requests.get(url) #FIXME? something can go wrong here...
+        
+        if get.status_code != 200:
+            return {'items': []} # no valid query - no results.
+
+        return get.json()
 
     def __iter__(self):
 
@@ -169,7 +351,7 @@ class YTActions():
         """
 
         # this choses data we need.
-        files = lambda x: {i['snippet']['title'].replace('/', '\\'): YTStor(i['id']['videoId'], opts={'pub_date': i['snippet']['publishedAt']}) for i in x['items']}
+        files = lambda x: {i['snippet']['title'].replace('/', '\\'): YTStor(i['id']['videoId'], i['snippet']['publishedAt'], opts=self.yts_opts) for i in x['items']}
 
         try:
             if self.adj_tokens[forward] is None: # in case someone would somehow cross boundary.
