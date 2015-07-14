@@ -102,16 +102,17 @@ Available options:
 
 .. line-block::
     **a** - Download audio
-    **v** - Download video, can take a `format` parameter.
+    **v** - Download video
+    **f** - Specify format - takes a parameter.
     **s** - Stream
-    **P** - Don't stream (preload).
+    **P** - Don't stream (preload)
 
 Examples::
 
     larry@localhost /tmp/youtube-dir/ $ mkdir "foo [a]"                # download audio only.
     larry@localhost /tmp/youtube-dir/ $ mkdir "bar [vP]"               # download video only, don't stream.
     larry@localhost /tmp/youtube-dir/ $ mkdir "baz channel:foo [avs]"  # download audio and video, stream.
-    larry@localhost /tmp/youtube-dir/ $ mkdir "foobar [v(360)s]"       # download video (prefered quality: 360), stream.
+    larry@localhost /tmp/youtube-dir/ $ mkdir "foobar [vf(360)s]"      # download video (prefered quality: 360), stream.
 
 Search results usage
 ====================

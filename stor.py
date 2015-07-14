@@ -10,6 +10,7 @@ from time import time, sleep
 from calendar import timegm
 from datetime import datetime
 from threading import Lock
+from copy import deepcopy
 
 from range_t import range_t
 
@@ -173,14 +174,18 @@ class YTStor():
 
         self.yid = yid
 
-        try: self.preferences['audio'] = opts['audio']
+        _pref = deepcopy(self.preferences) # new object, just to not affect other intances.
+        try: _pref['audio'] = opts['audio']
         except KeyError: pass
-        try: self.preferences['video'] = opts['video']
+        try: _pref['video'] = opts['video']
         except KeyError: pass
-        try: self.preferences['stream'] = opts['stream']
+        try: _pref['format'] = opts['format']
         except KeyError: pass
-        try: self.preferences['get_info_on_init'] = opts['get_info_on_init']
+        try: _pref['stream'] = opts['stream']
         except KeyError: pass
+        try: _pref['get_info_on_init'] = opts['get_info_on_init']
+        except KeyError: pass
+        self.preferences = _pref
 
         self.ytdl = youtube_dl.YoutubeDL({"quiet": True, "format": "bestvideo+bestaudio"})
         self.ytdl.add_info_extractor( self.ytdl.get_info_extractor("Youtube") )
@@ -203,13 +208,21 @@ class YTStor():
                 f['filesize'] = 'x' # next line won't fail, str for the sorting sake.
 
         # - 10000 for easy sorting - we'll get best quality and lowest filsize
-        aud = {(10000 - int(f['abr']),    f['filesize'], f['url']) for f in info['formats'] if 'audio' in f['format']}
-        vid = {(10000 - int(f['height']), f['filesize'], f['url']) for f in info['formats'] if 'video' in f['format']}
-        full= {(10000 - int(f['height']), f['filesize'], f['url']) for f in info['formats'] if 'DASH' not in f['format']}
+        aud = {(-int(f['abr']),    f['filesize'], f['url']) for f in info['formats'] if 'audio' in f['format']}
+        vid = {(-int(f['height']), f['filesize'], f['url']) for f in info['formats'] if 'video' in f['format']}
+        full= {(-int(f['height']), f['filesize'], f['url']) for f in info['formats'] if 'DASH' not in f['format']}
 
-        if self.preferences['audio'] and self.preferences['video']: fm = min(full)
-        elif self.preferences['audio']: fm = min(aud)
-        elif self.preferences['video']: fm = min(vid)
+        try:
+            _f = int( self.preferences.get('format') ) # if valid format is present, then choose closes value
+            print(_f)
+            _k = lambda x: abs(x[0] + _f) # +, because x[0] is negative
+
+        except ValueError:
+            _k = lambda d: d
+
+        if self.preferences['audio'] and self.preferences['video']: fm = min(full, key=_k)
+        elif self.preferences['audio']: fm = min(aud, key=_k)
+        elif self.preferences['video']: fm = min(vid, key=_k)
 
         self.url = fm[2]
         if fm[1] == 'x':

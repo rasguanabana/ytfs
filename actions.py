@@ -117,13 +117,13 @@ class YTActions():
         query : str
             Search query to parse. Besides a search query, user can specify additional search parameters and YTFS
             specific options. Syntax:
-            * Additional search parameters: ``option:value``. if `value` contains spaces, then surround it with
-            parentheses. Available parameters: `channel`, `max`, `before`, `after`.
-            * YTFS options: specify options between ``[`` and ``]``. Available options: `a`, `v`, `P`, `s`. If an
+            Additional search parameters: ``option:value``. if `value` contains spaces, then surround it with
+            parentheses; available parameters: `channel`, `max`, `before`, `after`.
+            YTFS options: specify options between ``[`` and ``]``; Available options: `a`, `v`, `f`, `P`, `s`. If an
             option takes a parameter, then specify it beetween parentheses.
 
             Examples: ``channel:foo search query``, ``my favourite music [a]``,
-            ``channel:(the famous funny cats channel) [v(240)P] funny cats max:20``.
+            ``channel:(the famous funny cats channel) [vf(240)P] funny cats max:20``.
 
             Invalid parameters/options are ignored.
 
@@ -149,6 +149,7 @@ class YTActions():
         translate = {
             'a': 'audio',
             'v': 'video',
+            'f': 'format',
             's': 'stream',
             'P': 'stream',
             'max': 'maxResults',

@@ -671,7 +671,7 @@ if __name__ == '__main__':
     avgrp.add_argument('-a', action='store_true', default=False, help="Download only audio")
     avgrp.add_argument('-v', action='store_true', default=False, help="Download only video")
 
-    #parser.add_argument('-f', default='10000', help="Preferred video format as video height (e.g. 720). Ignored if -a specified.")
+    parser.add_argument('-f', default=False, help="Preferred video format as video height (e.g. 720). Ignored if -a specified.")
     parser.add_argument('-r', action='store_true', default=False, help="RickRoll flag")
 
     s_grp = parser.add_mutually_exclusive_group()
@@ -688,6 +688,8 @@ if __name__ == '__main__':
         YTStor.preferences['audio'] = False
 
     if x.r: YTStor.rickastley = True
+
+    if x.f: YTStor.preferences['format'] = x.f
 
     elif x.P:
         YTStor.preferences['stream'] = False
