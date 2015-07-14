@@ -278,39 +278,6 @@ class YTStor():
         if safe[1] > self.filesize: safe[1] = self.filesize
         safe = tuple(safe)
 
-        ##need = [ safe[0] - ( 8 * length ), safe[1] + ( 16 * length ) ]
-        ##if need[0] < 0: need[0] = 0
-        ##if need[1] > self.filesize: need[1] = self.filesize
-        ##need = tuple(need)
-
-        ##ws = range_t()
-        ##if self.processing_range.contains(need): # needed range overlaps with currently processed.
-
-        ##    ws += self.processing_range - (self.processing_range - need) # to make that simplier, range_t should be updated FIXME
-
-        ##if current not in self.safe_range: # data is read outside of ``self.safe_range`` - we have to download a bit.
-
-        ##    dls = range_t({need}) - self.avail # missing data range.
-        ##    dls -= ws # we substract ranges, that we wait for, because somebody else takes care of them.
-
-        ##    self.processing_range += dls
-
-        ##    for r in dls.toset():
-        ##        _t = Thread( target=Downloader.fetch, args=(self, r, fh) ) # download
-        ##        _t.daemon = True
-        ##        _t.start()
-        ##        self.thread.append(_t)
-
-        ##    self.avail.setWaiting(need) # wait for data we need to be ready.
-
-        ##    self.safe_range += safe
-
-            #if offset > self.spooled * 2 * 1024**2: # zapisujemy dane na dysk
-            #    self.data.rollover()
-            #    self.spooled += 1
-
-        # done, we can return data:
-
         self.lock.acquire()
 
         try:
