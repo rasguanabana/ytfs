@@ -217,7 +217,7 @@ class YTStor():
             print(_f)
             _k = lambda x: abs(x[0] + _f) # +, because x[0] is negative
 
-        except ValueError:
+        except (ValueError, TypeError):
             _k = lambda d: d
 
         if self.preferences['audio'] and self.preferences['video']: fm = min(full, key=_k)
