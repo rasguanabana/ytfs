@@ -80,4 +80,4 @@ If you want to suggest a new feature or help with development in any way, please
 Licence
 =======
 
-MIT &copy; Adrian Włosiak
+MIT (c) Adrian Włosiak
