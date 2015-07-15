@@ -77,7 +77,7 @@ Contribute
 
 If you want to suggest a new feature or help with development in any way, please open an issue or contact me via email.
 
-Licence
+License
 =======
 
 MIT (c) Adrian Włosiak
