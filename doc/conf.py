@@ -70,7 +70,7 @@ author = 'Adrian Włosiak'
 #
 # The short X.Y version.
 import ytfs
-version = ytfs.__version__.split('-')[0]
+version = ytfs.__version__.split('a')[0]
 # The full version, including alpha/beta/rc tags.
 release = ytfs.__version__
 

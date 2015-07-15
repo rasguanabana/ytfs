@@ -24,5 +24,6 @@ setup(
     ],
     keywords = "youtube fuse filesystem",
     packages = ['ytfs'],
-    install_requires = ['fusepy', 'youtube_dl', 'requests']
+    install_requires = ['fusepy', 'youtube_dl', 'requests'],
+    entry_points = {'console_scripts': ['ytfs = ytfs.ytfs:main']}
 )

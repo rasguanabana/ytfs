@@ -4,7 +4,7 @@
 Main module of YTFS. Executing this module causes YTFS filesystem mount in given directory.
 """
 
-__version__ = "0.99-alpha1"
+__version__ = "0.99a1"
 
 import os
 import sys
