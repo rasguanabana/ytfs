@@ -43,9 +43,9 @@ You can narrow your search to a specific channel::
 
 $ mkdir "foo bar baz channel:foochannel"
 
-Other additional parameters like `before:`, `after:` or `max:` are available. See `docs <http://ytfs.readthedocs.org/en/latest/tutorial.html#advanced-search-parameters>`_ for details.
+Other additional parameters like ``before:``, ``after:`` or ``max:`` are available. See `docs <http://ytfs.readthedocs.org/en/latest/tutorial.html#advanced-search-parameters>`_ for details.
 
-To navigate between search pages use ` next` and ` prev` scripts in the search directory. Note that they have a space character at the beginning, thereby in most shells/file managers they should be alphabetically first::
+To navigate between search pages use ``next`` and ``prev`` scripts in the search directory. Note that they have a space character at the beginning, thereby in most shells/file managers they should be alphabetically first::
 
 $ ./\ next
 $ ./\ prev
