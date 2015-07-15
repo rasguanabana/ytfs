@@ -12,7 +12,7 @@ from datetime import datetime
 from threading import Lock
 from copy import deepcopy
 
-from range_t import range_t
+from .range_t import range_t
 
 class Downloader():
 

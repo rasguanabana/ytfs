@@ -5,7 +5,7 @@ Module responsible for searching movies in Internet services. As for now only Yo
 import os
 import requests
 
-from stor import YTStor
+from .stor import YTStor
 
 from copy import copy, deepcopy
 from collections import OrderedDict
