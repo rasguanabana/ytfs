@@ -8,3 +8,5 @@ fusepy
 test
 doc/_build
 doc/_static
+dist
+*.egg-info
