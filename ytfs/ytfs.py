@@ -47,7 +47,20 @@ def listxattr_FIX(self, path, namebuf, size):
 
 FUSE.listxattr = listxattr_FIX
 
-# and that's it.
+def flush_FIX(self, path, fip): # if feel bad...
+
+    if path is None: path = b"" # <= added fix here, not sure if it's right, but works.
+
+    if self.raw_fi:
+        fh = fip.contents
+    else:
+        fh = fip.contents.fh
+
+    return self.operations('flush', path.decode(self.encoding), fh)
+
+FUSE.flush = flush_FIX # It's just wrong...
+
+#######################
 
 
 class fd_dict(dict):
@@ -654,7 +667,14 @@ class YTFS(Operations):
         """
 
         try:
+            try:
+                self.fds[fh].unregisterHandler(fh)
+
+            except AttributeError:
+                pass
+
             del self.fds[fh]
+
         except KeyError:
             raise FuseOSError(errno.EBADF)
 

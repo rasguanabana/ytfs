@@ -105,8 +105,10 @@ class YTStor():
     ----------
     data : SpooledTemporaryFile
         Temporary file object - actual data is stored here.
-    closed : bool
-        ``True`` if ``data`` was closed.
+    fds : set
+        Set of file descriptors assigned to the object.
+    closing : bool
+        ``True`` if ``data`` is scheduled for closing.
     avail : range_t
         Object saying how much data we have.
     safe_range : range_t
@@ -155,6 +157,9 @@ class YTStor():
             raise ValueError("yid expected to be valid Youtube movie identifier") #FIXME
 
         self.data = tempfile.SpooledTemporaryFile()
+        self.fds = set()
+        self.closing = False
+
         self.lock = Lock() # lock to prevent threads from colliding
 
         self.avail = range_t()
@@ -207,14 +212,13 @@ class YTStor():
             if 'filesize' not in f:
                 f['filesize'] = 'x' # next line won't fail, str for the sorting sake.
 
-        # - 10000 for easy sorting - we'll get best quality and lowest filsize
+        # - for easy sorting - we'll get best quality and lowest filsize
         aud = {(-int(f['abr']),    f['filesize'], f['url']) for f in info['formats'] if 'audio' in f['format']}
         vid = {(-int(f['height']), f['filesize'], f['url']) for f in info['formats'] if 'video' in f['format']}
         full= {(-int(f['height']), f['filesize'], f['url']) for f in info['formats'] if 'DASH' not in f['format']}
 
         try:
             _f = int( self.preferences.get('format') ) # if valid format is present, then choose closes value
-            print(_f)
             _k = lambda x: abs(x[0] + _f) # +, because x[0] is negative
 
         except (ValueError, TypeError):
@@ -243,6 +247,8 @@ class YTStor():
             File descriptor.
         """
 
+        self.fds.add(fh)
+        print(self.fds)
         self.atime = int(time()) # update access time
 
         self.lock.acquire()
@@ -295,8 +301,32 @@ class YTStor():
     def clean(self):
 
         """
-        Clear data. Explicitly close ``self.data``.
+        Clear data. Explicitly close ``self.data`` if object is unused.
         """
 
-        self.data.close()
-        self.closed = True
+        self.closing = True # schedule for closing.
+
+        if not self.fds:
+            print("clean")
+            self.data.close()
+
+    def unregisterHandler(self, fh):
+
+        """
+        Unregister a file descriptor. Clean data, if such operation has been scheduled.
+
+        Parameters
+        ----------
+        fh : int
+            File descriptor.
+        """
+
+        try:
+            self.fds.remove(fh)
+
+        except KeyError:
+            pass
+
+        if self.closing and not self.fds:
+            print("unreg")
+            self.data.close()
