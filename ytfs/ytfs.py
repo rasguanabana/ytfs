@@ -20,7 +20,7 @@ from functools import wraps
 from fuse import FUSE, FuseOSError, Operations
 
 #from stor import YTStor
-from .actions import YTActions, YTStor
+from .actions import YTActions, YTStor, YTMetaStor
 
 
 #######################
@@ -84,8 +84,8 @@ class fd_dict(dict):
             File descriptor.
         """
 
-        if not isinstance(yts, (YTStor, type(None))):
-            raise TypeError("Expected YTStor object or None.")
+        if not isinstance(yts, (YTStor, YTMetaStor, type(None))):
+            raise TypeError("Expected YTStor object, YTMetaStor object or None.")
 
         k = 0
         while k in self.keys():
@@ -690,12 +690,13 @@ def main():
     avgrp.add_argument('-a', action='store_true', default=False, help="Download only audio")
     avgrp.add_argument('-v', action='store_true', default=False, help="Download only video")
 
-    parser.add_argument('-f', default=False, help="Preferred video format as video height (e.g. 720). Ignored if -a specified.")
+    parser.add_argument('-f', default=False, help="Preferred video format as video height (e.g. 720). Ignored if -a specified.", metavar="FORMAT")
     parser.add_argument('-r', action='store_true', default=False, help="RickRoll flag")
 
     s_grp = parser.add_mutually_exclusive_group()
     s_grp.add_argument('-P', action='store_true', default=False, help="Always download whole data before reading. Useful for obtaining heighest video quality.")
     parser.add_argument('-d', action='store_true', default=False, help="debug: run in foreground")
+    parser.add_argument('-m', default="", help="Metadata to fetch. Values: `desc` for descriptions, `thumb` for thumbnails. Use comma (,) for separating multiple values.", metavar="META1[,META2[,...]]")
 
     x = parser.parse_args()
 
@@ -708,10 +709,16 @@ def main():
 
     if x.r: YTStor.rickastley = True
 
-    if x.f: YTStor.preferences['format'] = x.f
+    if x.f:
+        YTStor.preferences['format'] = x.f
 
-    elif x.P:
+    if x.P:
         YTStor.preferences['stream'] = False
+
+    if x.m:
+        for m in x.m.split(','):
+            YTActions.preferences['metadata'][m] = True
+
 
     print("Mounting YTFS ver. " + __version__ + ".\nIf you encounter any bugs, please open an issue on GitHub: https://github.com/rasguanabana/ytfs")
 

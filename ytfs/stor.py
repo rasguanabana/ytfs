@@ -11,6 +11,7 @@ from calendar import timegm
 from datetime import datetime
 from threading import Lock
 from copy import deepcopy
+from io import BytesIO
 
 from .range_t import range_t
 
@@ -95,6 +96,7 @@ class Downloader():
                 yts.avail += tuple(ret)
                 yts.processing_range -= needed_range
 
+
 class YTStor():
 
     """
@@ -105,20 +107,18 @@ class YTStor():
     ----------
     data : SpooledTemporaryFile
         Temporary file object - actual data is stored here.
+    lock : Lock
+        Lock to sync multiple threads.
     fds : set
         Set of file descriptors assigned to the object.
     closing : bool
         ``True`` if ``data`` is scheduled for closing.
     avail : range_t
         Object saying how much data we have.
-    safe_range : range_t
-        Range contained in ``avail``. It constitutes these data ranges, whose read won't cause reading process to wait
-        for download of new data.
-    processing_range : range_t
-        Range of data being currently processed. Thanks to that, given thread can check if data, which it want to
-        download, isn't already being downloaded by another thread.
     filesize : int
         Total data size. Not yet downloaded data is also considered.
+    extension : str
+        File extension.
     rickastley : bool
         Make every video rickroll
     r_session : requests.Session
@@ -133,8 +133,9 @@ class YTStor():
 
     Parameters
     ----------
-    yid : str
-        YouTube video id.
+    init_data : dict
+        Initial data object needed for further operation. ``YTStor`` needs ``yid`` (str, YouTube video id) and
+        ``pub_date`` (video publication date as Unix timestamp).
     opts : dict
         Options that will override globally set preferences.
     """
@@ -148,7 +149,9 @@ class YTStor():
 
     rickastley = False
 
-    def __init__(self, yid, pub_date, opts=dict()):
+    def __init__(self, init_data, opts=dict()):
+
+        yid = init_data['yid'] # it must be here.
 
         if self.rickastley:
             yid = "dQw4w9WgXcQ" #trolololo
@@ -167,11 +170,12 @@ class YTStor():
         self.processing_range = range_t()
 
         self.filesize = 4096
+        self.extension = ".mp4" # FIXME
 
         self.atime = int(time())
         try:
             # convert from iso 8601
-            self.ctime = timegm(datetime.strptime(pub_date, "%Y-%m-%dT%H:%M:%S.%fZ").timetuple())
+            self.ctime = timegm(datetime.strptime(init_data['pub_date'], "%Y-%m-%dT%H:%M:%S.%fZ").timetuple())
         except KeyError:
             self.ctime = self.atime
 
@@ -248,7 +252,6 @@ class YTStor():
         """
 
         self.fds.add(fh)
-        print(self.fds)
         self.atime = int(time()) # update access time
 
         self.lock.acquire()
@@ -307,7 +310,6 @@ class YTStor():
         self.closing = True # schedule for closing.
 
         if not self.fds:
-            print("clean")
             self.data.close()
 
     def unregisterHandler(self, fh):
@@ -328,5 +330,80 @@ class YTStor():
             pass
 
         if self.closing and not self.fds:
-            print("unreg")
             self.data.close()
+
+class YTMetaStor():
+
+    """
+    Class that holds metadata in a seperate file. Should always correspond to existing *Stor object, though this
+    relation isn't held anywhere in *Stor objects, they'll just share a filename, but with different extensions.
+    """
+
+    # TODO: docs
+
+    extension = ""
+
+    def __init__(self, init_data, opts=dict()):
+
+        self.data = BytesIO()
+
+        self.atime = int(time())
+        try:
+            # convert from iso 8601
+            self.ctime = timegm(datetime.strptime(init_data['pub_date'], "%Y-%m-%dT%H:%M:%S.%fZ").timetuple())
+        except KeyError:
+            self.ctime = self.atime
+
+        if not init_data.get('url'):
+
+            self.data.write(bytes(init_data['title'], 'utf-8') + b" [" + bytes(init_data['yid'], 'utf-8')
+                    + b"]\nby: " + bytes(init_data['channel'], 'utf-8') + b" at: "
+                    + bytes(init_data['pub_date'], 'utf-8') + b"\n\n" + bytes(init_data['desc'], 'utf-8') + b"\n")
+
+            self.url = None
+
+        else:
+            url = init_data['url']
+            self.data.write(requests.get(url).content)
+
+        self.filesize = self.data.tell()
+
+    def obtainInfo(self):
+        "Just return."
+        return True
+
+    def registerHandler(self, fh):
+
+        "Update atime."
+
+        self.atime = int(time())
+
+    def read(self, offset, length, fh):
+
+        """
+        Read data.
+
+        Parameters
+        ----------
+        offset : int
+            Read offset.
+        length : int
+            Length of data.
+        fh : int
+            File descriptor, ignored.
+        """
+
+        self.data.seek(offset)
+        return self.data.read(length)
+
+    def clean(self):
+
+        """
+        Close file-like object.
+        """
+
+        self.data.close()
+
+    def unregisterHandler(self, fh):
+        "Just pass."
+        pass

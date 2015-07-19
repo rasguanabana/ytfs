@@ -4,24 +4,28 @@ Short manual
 YTFS mounting
 =============
 
-To mount YTFS in a chosen directory, one should execute ``ytfs.py`` and provide path to empty directory as argument.
+To mount YTFS in a chosen directory, one should execute ``ytfs`` command and provide path to empty directory as argument.
 
 Avalaible options:
 
 .. line-block::
     **-a** : Download audio only.
     **-v** : Download video only.
+    **-f** : Specify format as video height, e.g. ``-f 240``.
     **-r** : RickRoll flag.
     **-P** : Load whole data before reading (disables streaming preference). Useful for obtaining heighest video quality.
     **-d** : Debug - run YTFS in foreground.
+    **-m** : Obtain metadata. Available values: ``desc`` - descriptions, ``thumb`` - thumbnails. They will appear as a separate files in a search directory. If you want to specify more values than one, separate them with comma, e.g. ``-m desc,thumb``.
+
+You will be able to override those options for individual searches. See :ref:`ov_m_opts`.
 
 .. important:: By default, YTFS provides streamable full movie data. Most probably, it won't be in the highest quality available. For best quality -P flag may be needed.
 
 .. warning:: Some programs may have problems with preloaded files. They can fail after necessity of waiting for a long time after ``open`` call.
 
-Example (when working directory contains ``ytfs.py``)::
+Example::
 
-    larry@localhost ~/ytfs $ ./ytfs.py -v /tmp/youtube-dir
+    larry@localhost ~/ytfs $ ytfs -v /tmp/youtube-dir
 
 YTFS will be mounted in /tmp/youtube-dir. Only video data will be downloaded (no sound).
 
@@ -93,6 +97,8 @@ Examples::
     larry@localhost /tmp/youtube-dir/ $ mkdir "channel:snakes python"
     larry@localhost /tmp/youtube-dir/ $ mkdir "foo bar max:1"
 
+.. _ov_m_opts:
+
 Overriding mount options for specific directory
 -----------------------------------------------
 
@@ -106,6 +112,7 @@ Available options:
     **f** - Specify format - takes a parameter.
     **s** - Stream
     **P** - Don't stream (preload)
+    **m** - Specify metadata to obtain - can take a parameter. Giving no parameter will disable metadata.
 
 Examples::
 
@@ -113,6 +120,10 @@ Examples::
     larry@localhost /tmp/youtube-dir/ $ mkdir "bar [vP]"               # download video only, don't stream.
     larry@localhost /tmp/youtube-dir/ $ mkdir "baz channel:foo [avs]"  # download audio and video, stream.
     larry@localhost /tmp/youtube-dir/ $ mkdir "foobar [vf(360)s]"      # download video (prefered quality: 360), stream.
+    larry@localhost /tmp/youtube-dir/ $ mkdir "foo [m(desc)]"          # obtain descriptions.
+    larry@localhost /tmp/youtube-dir/ $ mkdir "foo [m(desc,thumb)]"    # obtain descriptions and thumbnails.
+    larry@localhost /tmp/youtube-dir/ $ mkdir "foo [m]"                # don't obtain any metadata.
+    larry@localhost /tmp/youtube-dir/ $ mkdir "foo [m()]"              # the same as above.
 
 Search results usage
 ====================

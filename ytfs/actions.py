@@ -5,7 +5,7 @@ Module responsible for searching movies in Internet services. As for now only Yo
 import os
 import requests
 
-from .stor import YTStor
+from .stor import YTStor, YTMetaStor
 
 from copy import copy, deepcopy
 from collections import OrderedDict
@@ -42,6 +42,8 @@ class YTActions():
         Custom options passed to YTStor objects created in this class.
     api_key : str
         YouTube API key.
+    preferences : dict
+        Current object preferences.
 
     Parameters
     ----------
@@ -50,6 +52,13 @@ class YTActions():
     """
 
     api_key = "AIzaSyCPOg5HQfHayQH6mRu4m2PMGc3eHd5lllg"
+
+    preferences = {
+        "metadata": {
+            "desc": False,
+            "thumb": False
+        }
+    }
 
     def __init__(self, search_query):
 
@@ -66,7 +75,27 @@ class YTActions():
         self.yts_opts = dict()
 
         parsed = self.__searchParser(search_query)
+
+        # search params
         self.search_params.update(parsed[0])
+
+        # YTa options
+        _pref = deepcopy(self.preferences) # new object, just to not affect other intances.
+        if 'metadata' in parsed[1]:
+            try:
+                meta_list = parsed[1]['metadata'].split(',')
+            except AttributeError:
+                meta_list = []
+
+            if 'desc' in meta_list: _pref['metadata']['desc'] = True
+            else: _pref['metadata']['desc'] = False
+
+            if 'thumb' in meta_list: _pref['metadata']['thumb'] = True
+            else: _pref['metadata']['thumb'] = False
+
+        self.preferences = _pref
+
+        # YTs options
         self.yts_opts = parsed[1]
 
         if 'audio' in parsed[1] and 'video' not in parsed[1]: self.yts_opts['video'] = False
@@ -119,8 +148,8 @@ class YTActions():
             specific options. Syntax:
             Additional search parameters: ``option:value``. if `value` contains spaces, then surround it with
             parentheses; available parameters: `channel`, `max`, `before`, `after`.
-            YTFS options: specify options between ``[`` and ``]``; Available options: `a`, `v`, `f`, `P`, `s`. If an
-            option takes a parameter, then specify it beetween parentheses.
+            YTFS options: specify options between ``[`` and ``]``; Available options: `a`, `v`, `f`, `P`, `s`, `m`.
+            If an option takes a parameter, then specify it beetween parentheses.
 
             Examples: ``channel:foo search query``, ``my favourite music [a]``,
             ``channel:(the famous funny cats channel) [vf(240)P] funny cats max:20``.
@@ -152,6 +181,7 @@ class YTActions():
             'f': 'format',
             's': 'stream',
             'P': 'stream',
+            'm': 'metadata',
             'max': 'maxResults',
             'channel': 'channelId',
             'before': 'publishedBefore',
@@ -290,7 +320,7 @@ class YTActions():
         if self.adj_tokens[True] is not None:
             ctrl += [ " next" ]
 
-        self.vf_iter = iter(ctrl + [e + ".mp4" for e in self.visible_files])
+        self.vf_iter = iter(ctrl + [e + self.visible_files[e].extension for e in self.visible_files])
 
         return self
 
@@ -323,7 +353,12 @@ class YTActions():
             ``YTStor`` object associated with name `key`.
         """
 
-        return self.visible_files[ os.path.splitext(key)[0] ] #pozbywamy się rozszerzenia, btw.
+        _k = os.path.splitext(key)
+
+        if _k[1] not in ('.txt', '.jpg'):
+            key = _k[0]
+
+        return self.visible_files[key]
 
     def __in__(self, arg):
 
@@ -336,7 +371,10 @@ class YTActions():
             Filename.
         """
 
-        arg = os.path.splitext(arg)[0]
+        _a = os.path.splitext(arg)
+
+        if _a[1] not in ('txt', 'jpg'):
+            arg = _a[0]
 
         return arg in self.visible_files or (self.adj_tokens[0] is not None and arg == " prev") or (self.adj_tokens[0] is None and self.adj_tokens[1] is not None and arg == " next")
 
@@ -352,7 +390,28 @@ class YTActions():
         """
 
         # this choses data we need.
-        files = lambda x: {i['snippet']['title'].replace('/', '\\'): YTStor(i['id']['videoId'], i['snippet']['publishedAt'], opts=self.yts_opts) for i in x['items']}
+        files = lambda x: {
+            i['snippet']['title'].replace('/', '\\'): YTStor(
+                {'yid': i['id']['videoId'], 'pub_date': i['snippet']['publishedAt']},
+                opts=self.yts_opts) for i in x['items']
+        }
+        descs = lambda x: {
+            (i['snippet']['title'].replace('/', '\\') + '.txt'): YTMetaStor(
+                {
+                    'title': i['snippet']['title'],
+                    'yid': i['id']['videoId'],
+                    'desc': i['snippet']['description'],
+                    'channel': i['snippet']['channelTitle'],
+                    'pub_date': i['snippet']['publishedAt']
+                },
+                opts=dict()
+            ) for i in x['items']
+        }
+        thumbs = lambda x: {
+            (i['snippet']['title'].replace('/', '\\') + '.jpg'): YTMetaStor(
+                {'url': i['snippet']['thumbnails']['high']['url'], 'pub_date': i['snippet']['publishedAt']}, opts=dict()
+            ) for i in x['items']
+        }
 
         try:
             if self.adj_tokens[forward] is None: # in case someone would somehow cross boundary.
@@ -360,22 +419,30 @@ class YTActions():
         except KeyError:
             pass
 
+        recv = None
         try:
             try:
                 data = self.avail_files[ self.adj_tokens[forward] ] # maybe data is already available locally.
             except KeyError:
                 recv = self.__search( self.adj_tokens[forward] ) # nope, we have to search.
-                data = (None, files(recv)) # little format unification.
                                                                                                  
         except KeyError: # wrong index in adj_tokens
 
             if forward is None:
                 recv = self.__search()
-                data = (None, files(recv)) # same here
             else:
                 raise ValueError("Valid values for forward are True, False or None (default).")
 
+        if recv is not None:
+
+            _d = files(recv)
+            if self.preferences['metadata']['desc']: _d.update(descs(recv))
+            if self.preferences['metadata']['thumb']: _d.update(thumbs(recv))
+
+            data = (None, _d) # little format unification.
+
         if len(self.avail_files) > 4:
+
             pop = self.avail_files.popitem(False) # get rid of the oldest data.
             for s in pop[1][1].values(): s.clean()
 
