@@ -66,9 +66,9 @@ Or you can copy them on your hard drive::
 Unmounting
 ----------
 
-To unmount, use ``fusermout -u`` and specify the directory where YTFS was mounted::
+To unmount, use ``fusermount -u`` and specify the directory where YTFS was mounted::
 
-    $ fusermout -u youtube
+    $ fusermount -u youtube
 
 Dependencies
 ============
