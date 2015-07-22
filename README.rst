@@ -16,6 +16,8 @@ You can install YTFS with pip::
 
 You need **Python 3.4** or newer.
 
+.. important:: Only systems where FUSE lib (or compatible) is available are supported. YTFS was tested on Linux, OS X and FreeBSD.
+
 Usage
 =====
 
