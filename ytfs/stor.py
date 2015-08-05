@@ -117,6 +117,8 @@ class YTStor():
         Object saying how much data we have.
     filesize : int
         Total data size. Not yet downloaded data is also considered.
+    disk : int
+        How much data is cached on disk (8M factor).
     extension : str
         File extension.
     rickastley : bool
@@ -170,6 +172,7 @@ class YTStor():
         self.processing_range = range_t()
 
         self.filesize = 4096
+        self.disk = 0
         self.extension = ".mp4" # FIXME
 
         self.atime = int(time())
@@ -295,6 +298,11 @@ class YTStor():
             for r in dl.toset():
                 Downloader.fetch(self, r, fh) # download is, let's say, atomic thanks to lock
 
+            if self.disk + 1 < len(self.avail):
+
+                self.data.rollover()
+                self.disk += 1
+
         finally:
             self.lock.release()
 
@@ -328,6 +336,14 @@ class YTStor():
 
         except KeyError:
             pass
+
+        self.lock.acquire()
+
+        try:
+            self.data.rollover() # rollover data on close.
+
+        finally:
+            self.lock.release()
 
         if self.closing and not self.fds:
             self.data.close()
