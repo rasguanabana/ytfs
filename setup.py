@@ -1,9 +1,18 @@
 from setuptools import setup
-from ytfs import __version__
+
+import re
+import ast
+
+
+_version_re = re.compile(r'__version__\s+=\s+(.*)')
+
+with open('ytfs/ytfs.py', 'rb') as f:
+    version = str(ast.literal_eval(_version_re.search(
+        f.read().decode('utf-8')).group(1)))
 
 setup(
     name = 'ytfs',
-    version = __version__,
+    version = version,
     description = "YouTube File System",
     long_description = "YTFS - FUSE based file system which enables you to search and play movies from YouTube as files - with tools of your choice.",
     url = "https://github.com/rasguanabana/ytfs",
