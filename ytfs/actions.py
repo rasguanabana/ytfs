@@ -25,7 +25,7 @@ class YTActions():
                         "token": (`adj_tokens`, `files`),
                         ...
                     }
-                                                                        
+
         `adj_tokens` contains adjacent tokens, `files` contains files of given search.
         (just as described below).
     visible_files : dict
@@ -71,7 +71,8 @@ class YTActions():
 
         self.vf_iter = None
 
-        self.search_params = {"maxResults": 10}
+        self.search_params = {"maxResults": 10,
+                "order": self.preferences["order"]} # relevance by default
         self.yts_opts = dict()
 
         parsed = self.__searchParser(search_query)
@@ -107,7 +108,7 @@ class YTActions():
         if parsed[0].get("publishedAfter"): self.search_params["publishedAfter"] += "T00:00:00Z"
 
     def __getChannelId(self):
-        
+
         """
         Obtain channel id for channel name, if present in ``self.search_params``.
         """
@@ -147,7 +148,7 @@ class YTActions():
             Search query to parse. Besides a search query, user can specify additional search parameters and YTFS
             specific options. Syntax:
             Additional search parameters: ``option:value``. if `value` contains spaces, then surround it with
-            parentheses; available parameters: `channel`, `max`, `before`, `after`.
+            parentheses; available parameters: `channel`, `max`, `before`, `after`, `order`.
             YTFS options: specify options between ``[`` and ``]``; Available options: `a`, `v`, `f`, `P`, `s`, `m`.
             If an option takes a parameter, then specify it beetween parentheses.
 
@@ -169,10 +170,9 @@ class YTActions():
         buf = ""
         ptr = ""
 
-        p_avail = ("channel", "max", "before", "after")
+        p_avail = ("channel", "max", "before", "after", "order")
 
         opts = dict()
-        
         par_open = False
 
         translate = {
@@ -186,6 +186,7 @@ class YTActions():
             'channel': 'channelId',
             'before': 'publishedBefore',
             'after': 'publishedAfter',
+            'order': 'order',
             '': 'q'
         }
 
@@ -295,7 +296,6 @@ class YTActions():
         url = api_fixed_url + urlencode(d)
 
         get = requests.get(url) #FIXME? something can go wrong here...
-        
         if get.status_code != 200:
             return {'items': []} # no valid query - no results.
 
@@ -425,7 +425,6 @@ class YTActions():
                 data = self.avail_files[ self.adj_tokens[forward] ] # maybe data is already available locally.
             except KeyError:
                 recv = self.__search( self.adj_tokens[forward] ) # nope, we have to search.
-                                                                                                 
         except KeyError: # wrong index in adj_tokens
 
             if forward is None:

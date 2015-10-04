@@ -84,6 +84,7 @@ Available parameters:
     **max** - Value from 0 to 50. Specify max result number per search "page". Defaults to 10.
     **before** - Search before specified date. Format YYYY-MM-DD, e.g. 2010-10-10.
     **after** - Search after specified date. Format as above.
+    **order** - Specify the method that will be used to order resources. Values: `date`, `rating`, `relevance`, `title` and `viewCount`. Default is relevance.
 
 .. note:: If ``channel`` is given, then you can ommit actual search query. Most popular videos of the channel will be returned.
 

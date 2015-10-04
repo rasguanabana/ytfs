@@ -77,7 +77,7 @@ class fd_dict(dict):
         yts : YTStor-obj or None
             ``YTStor`` object for which we want to allocate a descriptor or ``None``, if we allocate descriptor for a
             control file.
-     
+
         Returns
         -------
         k : int
@@ -107,7 +107,6 @@ class YTFS(Operations):
     searches : dict
         Dictionary that is a main interface to data of idividual searches and their results (movies) stored by
         filesystem. Format:
-        
           searches = {
               'search phrase 1':  YTActions({
                                        'tytul1': <YTStor obj>,
@@ -117,7 +116,6 @@ class YTFS(Operations):
               'search phrase 2':  YTActions({ ... }),
               ...
           }
-        
         ``YTStor`` object stores all needed information about movie, not only multimedia data.
 
         Attention: for simplicity, file extensions are present only during directory listing. In all other operations
@@ -210,7 +208,6 @@ class YTFS(Operations):
                 return YTFS.PathType.subdir
 
             elif p[0] and p[1]:
-                
                 if p[1][0] == ' ':
                     return YTFS.PathType.ctrl
                 else:
@@ -360,7 +357,6 @@ class YTFS(Operations):
         st['st_ctime'] = st['st_atime']
 
         if pt is self.PathType.file:
-            
             st['st_mode'] = stat.S_IFREG | 0o444
             st['st_nlink'] = 1
 
@@ -535,7 +531,7 @@ class YTFS(Operations):
 
         """
         File open. ``YTStor`` object associated with this file is initialised and written to ``self.fds``.
-        
+
         Parameters
         ----------
         tid : str
@@ -698,6 +694,9 @@ def main():
     parser.add_argument('-d', action='store_true', default=False, help="debug: run in foreground")
     parser.add_argument('-m', default="", help="Metadata to fetch. Values: `desc` for descriptions, `thumb` for thumbnails. Use comma (,) for separating multiple values.", metavar="META1[,META2[,...]]")
 
+    avgrp.add_argument('-o', choices=['date', 'rating', 'relevance', 'title', 'viewCount'], default='relevance',
+                        help='Specify the method that will be used to order resources. Values: `date`, `rating`, `relevance`, `title` and `viewCount`. Default is relevance.')
+
     x = parser.parse_args()
 
     if x.a:
@@ -719,6 +718,7 @@ def main():
         for m in x.m.split(','):
             YTActions.preferences['metadata'][m] = True
 
+    YTActions.preferences['order'] = x.o
 
     print("Mounting YTFS ver. " + __version__ + ".\nIf you encounter any bugs, please open an issue on GitHub: https://github.com/rasguanabana/ytfs")
 
