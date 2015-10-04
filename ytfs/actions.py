@@ -71,7 +71,8 @@ class YTActions():
 
         self.vf_iter = None
 
-        self.search_params = {"maxResults": 10}
+        self.search_params = {"maxResults": 10,
+                "order": self.preferences["order"]} # relevance by default
         self.yts_opts = dict()
 
         parsed = self.__searchParser(search_query)
@@ -163,8 +164,6 @@ class YTActions():
         """
 
         ret = dict()
-
-        ret['order'] = self.preferences['order']
 
         parse_params = True
 
