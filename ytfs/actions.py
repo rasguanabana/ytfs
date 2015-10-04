@@ -25,6 +25,7 @@ class YTActions():
                         "token": (`adj_tokens`, `files`),
                         ...
                     }
+
         `adj_tokens` contains adjacent tokens, `files` contains files of given search.
         (just as described below).
     visible_files : dict
@@ -106,6 +107,7 @@ class YTActions():
         if parsed[0].get("publishedAfter"): self.search_params["publishedAfter"] += "T00:00:00Z"
 
     def __getChannelId(self):
+
         """
         Obtain channel id for channel name, if present in ``self.search_params``.
         """

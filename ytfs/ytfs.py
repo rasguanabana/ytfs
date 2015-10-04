@@ -77,6 +77,7 @@ class fd_dict(dict):
         yts : YTStor-obj or None
             ``YTStor`` object for which we want to allocate a descriptor or ``None``, if we allocate descriptor for a
             control file.
+
         Returns
         -------
         k : int
@@ -530,6 +531,7 @@ class YTFS(Operations):
 
         """
         File open. ``YTStor`` object associated with this file is initialised and written to ``self.fds``.
+
         Parameters
         ----------
         tid : str
