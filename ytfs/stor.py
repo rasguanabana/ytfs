@@ -216,7 +216,7 @@ class YTStor():
 
         # else:
         for f in info['formats']:
-            if 'filesize' not in f:
+            if 'filesize' not in f or not f['filesize']:
                 f['filesize'] = 'x' # next line won't fail, str for the sorting sake.
 
         # - for easy sorting - we'll get best quality and lowest filsize
@@ -231,15 +231,32 @@ class YTStor():
         except (ValueError, TypeError):
             _k = lambda d: d
 
-        if self.preferences['audio'] and self.preferences['video']: fm = min(full, key=_k)
-        elif self.preferences['audio']: fm = min(aud, key=_k)
-        elif self.preferences['video']: fm = min(vid, key=_k)
+        if self.preferences['audio'] and self.preferences['video']: fm = sorted(full, key=_k)
+        elif self.preferences['audio']: fm = sorted(aud, key=_k)
+        elif self.preferences['video']: fm = sorted(vid, key=_k)
 
-        self.url = fm[2]
-        if fm[1] == 'x':
-            self.filesize = int(self.r_session.head(self.url).headers['content-length'])
-        else:
-            self.filesize = int(fm[1])
+        filesize = 0
+        i = -1
+
+        try:
+            while filesize == 0: # some videos are problematic, we will try to find format with non-zero filesize
+
+                i += 1
+
+                self.url = fm[i][2]
+                if fm[i][1] == 'x':
+                    filesize = int(self.r_session.head(self.url).headers['content-length'])
+                else:
+                    filesize = int(fm[i][1])
+
+        except IndexError: # finding filesize failed for every format
+
+            self.url = (info['requested_formats'][0]['url'], info['requested_formats'][1]['url'])
+            self.preferences['stream'] = False # hopefully non-stream download will work
+
+            return True
+
+        self.filesize = filesize
 
         return True
 
