@@ -208,7 +208,10 @@ class YTStor():
         Method for obtaining information about the movie.
         """
 
-        info = self.ytdl.extract_info(self.yid, download=False)
+        try:
+            info = self.ytdl.extract_info(self.yid, download=False)
+        except youtube_dl.utils.DownloadError:
+            raise ConnectionError
 
         if not self.preferences['stream']:
             self.url = (info['requested_formats'][0]['url'], info['requested_formats'][1]['url'])
@@ -280,6 +283,8 @@ class YTStor():
             if (0, self.filesize) not in self.avail and self.preferences['stream'] is False:
 
                 Downloader.fetch(self, None, fh) # lock forces other threads to wait, so fetch will perform just once.
+        except requests.exceptions.ConnectionError:
+            raise ConnectionError
 
         finally:
             self.lock.release()
@@ -313,7 +318,10 @@ class YTStor():
             dl = range_t({safe}) - self.avail
 
             for r in dl.toset():
-                Downloader.fetch(self, r, fh) # download is, let's say, atomic thanks to lock
+                try:
+                    Downloader.fetch(self, r, fh) # download is, let's say, atomic thanks to lock
+                except requests.exceptions.ConnectionError:
+                    raise ConnectionError
 
             if self.disk + 1 < len(self.avail):
 

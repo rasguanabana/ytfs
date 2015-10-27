@@ -102,7 +102,10 @@ class YTActions():
         if 'audio' in parsed[1] and 'video' not in parsed[1]: self.yts_opts['video'] = False
         if 'video' in parsed[1] and 'audio' not in parsed[1]: self.yts_opts['audio'] = False
 
-        self.__getChannelId()
+        try:
+            self.__getChannelId()
+        except requests.exceptions.ConnectionError:
+            raise ConnectionError
 
         if parsed[0].get("publishedBefore"): self.search_params["publishedBefore"] += "T00:00:00Z"
         if parsed[0].get("publishedAfter"): self.search_params["publishedAfter"] += "T00:00:00Z"
@@ -295,7 +298,11 @@ class YTActions():
         d.update(self.search_params)
         url = api_fixed_url + urlencode(d)
 
-        get = requests.get(url) #FIXME? something can go wrong here...
+        try:
+            get = requests.get(url)
+        except requests.exceptions.ConnectionError:
+            raise ConnectionError
+
         if get.status_code != 200:
             return {'items': []} # no valid query - no results.
 

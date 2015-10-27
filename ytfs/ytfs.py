@@ -440,8 +440,13 @@ class YTFS(Operations):
         if self.__exists(tid):
             raise FuseOSError(errno.EEXIST)
 
-        self.searches[tid[0]] = YTActions(tid[0])
-        self.searches[tid[0]].updateResults()
+        try:
+            dir_ent = YTActions(tid[0])
+            dir_ent.updateResults()
+        except ConnectionError:
+            raise FuseOSError(errno.ENETDOWN)
+
+        self.searches[tid[0]] = dir_ent # now adding directory entry is legit, nothing failed.
 
         return 0
 
@@ -472,8 +477,13 @@ class YTFS(Operations):
         if self.__exists(new):
             raise FuseOSError(errno.EEXIST)
 
-        self.searches[new[0]] = YTActions(new[0])
-        self.searches[new[0]].updateResults()
+        try:
+            new_dir_ent = YTActions(new[0])
+            new_dir_ent.updateResults()
+        except ConnectionError:
+            raise FuseOSError(errno.ENETDOWN)
+
+        self.searches[new[0]] = new_dir_ent # as in mkdir
 
         try:
             del self.searches[old[0]]
@@ -562,9 +572,19 @@ class YTFS(Operations):
         except KeyError:
             return self.fds.push(None) # for control file no association is needed.
 
-        if yts.obtainInfo(): #FIXME coz it's ugly.
+        try:
+            obI = yts.obtainInfo() # network may fail
+        except ConnectionError:
+            raise FuseOSError(errno.ENETDOWN)
+
+        if obI:
             fh = self.fds.push(yts)
-            yts.registerHandler(fh)
+
+            try:
+                yts.registerHandler(fh)
+            except ConnectionError:
+                raise FuseOSError(errno.ENETDOWN)
+
             return fh
         else:
             raise FuseOSError(errno.EINVAL)
@@ -610,6 +630,9 @@ class YTFS(Operations):
         except KeyError: # descriptor does not exist.
             raise FuseOSError(errno.EBADF)
 
+        except ConnectionError:
+            raise FuseOSError(errno.ESTALE)
+
     def truncate(*args): return 0 # throws EROFS by default, so write fails.
     @_pathdec
     def write(self, tid, data, offset, fh):
@@ -645,6 +668,8 @@ class YTFS(Operations):
             self.searches[tid[0]].updateResults(d)
         except KeyError:
             raise FuseOSError(errno.EINVAL) # sth went wrong...
+        except ConnectionError:
+            raise FuseOSError(errno.ENETDOWN)
 
         return len(data)
 
