@@ -27,7 +27,12 @@ class Mock(MagicMock):
         return Mock()
 
 MOCK_MODULES = ['fusepy']
-sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
+
+# check where we are:
+on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
+
+if on_rtd:
+    sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
