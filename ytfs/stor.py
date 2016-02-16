@@ -220,7 +220,7 @@ class YTStor():
         # else:
         for f in info['formats']:
             if 'filesize' not in f or not f['filesize']:
-                f['filesize'] = 'x' # next line won't fail, str for the sorting sake.
+                f['filesize'] = -1 # next line won't fail, str for the sorting sake.
 
         # - for easy sorting - we'll get best quality and lowest filsize
         aud = {(-int(f['abr']),    f['filesize'], f['url']) for f in info['formats'] if 'audio' in f['format'] and 'abr' in f}
@@ -247,7 +247,7 @@ class YTStor():
                 i += 1
 
                 self.url = fm[i][2]
-                if fm[i][1] == 'x':
+                if fm[i][1] == -1:
                     filesize = int(self.r_session.head(self.url).headers['content-length'])
                 else:
                     filesize = int(fm[i][1])
