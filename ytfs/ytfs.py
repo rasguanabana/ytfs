@@ -721,6 +721,7 @@ def main():
 
     avgrp.add_argument('-o', choices=['date', 'rating', 'relevance', 'title', 'viewCount'], default='relevance',
                         help='Specify the method that will be used to order resources. Values: `date`, `rating`, `relevance`, `title` and `viewCount`. Default is relevance.')
+    parser.add_argument('--allow-other', action='store_true', default=False, help="Allow other users to access the filesystem. For this to work, you'll need to set 'user_allow_other' in /etc/fuse.conf. You will need this setting if you want to share YTFS over network (SMB, NFS, etc).")
 
     x = parser.parse_args()
 
@@ -747,6 +748,6 @@ def main():
 
     print("Mounting YTFS ver. " + __version__ + ".\nIf you encounter any bugs, please open an issue on GitHub: https://github.com/rasguanabana/ytfs")
 
-    FUSE(YTFS(), x.mountpoint[0], foreground=x.d)
+    FUSE(YTFS(), x.mountpoint[0], foreground=x.d, allow_other=x.allow_other)
 
 if __name__ == '__main__': main()
