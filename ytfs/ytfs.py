@@ -143,7 +143,7 @@ class YTFS(Operations):
         'st_ctime': 0
     }
 
-    __sh_script = b"#!/bin/sh\necho 1 > $0\n"
+    __sh_script = b'#!/bin/sh\necho 1 > "$0"\n'
 
     def __init__(self):
 
@@ -705,7 +705,7 @@ class YTFS(Operations):
 def main():
 
     parser = ArgumentParser(description="YTFS - YouTube Filesystem: search and play materials from YouTube using filesystem operations.", epilog="Streaming may not work if your player will read whole file into its buffer.", prog="ytfs", formatter_class=lambda prog: HelpFormatter(prog, max_help_position=50))
-    parser.add_argument('mountpoint', type=str, nargs=1, help="Mountpoint")
+    parser.add_argument('MOUNTPOINT', type=str, nargs=1, help="Mountpoint")
 
     avgrp = parser.add_mutually_exclusive_group()
     avgrp.add_argument('-a', action='store_true', default=False, help="Download only audio")
@@ -748,6 +748,6 @@ def main():
 
     print("Mounting YTFS ver. " + __version__ + ".\nIf you encounter any bugs, please open an issue on GitHub: https://github.com/rasguanabana/ytfs")
 
-    FUSE(YTFS(), x.mountpoint[0], foreground=x.d, allow_other=x.allow_other)
+    FUSE(YTFS(), x.MOUNTPOINT[0], foreground=x.d, allow_other=x.allow_other)
 
 if __name__ == '__main__': main()
