@@ -200,7 +200,7 @@ class YTStor():
         self.preferences = _pref
 
         self.ytdl = youtube_dl.YoutubeDL({"quiet": True, "format": "bestvideo+bestaudio"})
-        self.ytdl.add_info_extractor( self.ytdl.get_info_extractor("Youtube") )
+        self.ytdl.add_info_extractor( self.ytdl.get_info_extractor("Youtube"))
 
     def obtainInfo(self):
 
@@ -223,9 +223,9 @@ class YTStor():
                 f['filesize'] = float('inf') # next line won't fail, infinity, because unknown filesize is the least preferred
 
         # - for easy sorting - we'll get best quality and lowest filsize
-        aud = {(-int(f['abr']),    f['filesize'], f['url']) for f in info['formats'] if 'audio' in f['format'] and 'abr' in f}
-        vid = {(-int(f['height']), f['filesize'], f['url']) for f in info['formats'] if 'video' in f['format'] and 'height' in f}
-        full= {(-int(f['height']), f['filesize'], f['url']) for f in info['formats'] if 'DASH' not in f['format'] and 'height' in f}
+        aud = {(-int(f['abr']),    f['filesize'], f['url']) for f in info['formats'] if f.get('abr') and not f.get('height')}
+        vid = {(-int(f['height']), f['filesize'], f['url']) for f in info['formats'] if not f.get('abr') and f.get('height')}
+        full= {(-int(f['height']), f['filesize'], f['url']) for f in info['formats'] if f.get('abr') and f.get('height')}
 
         try:
             _f = int( self.preferences.get('format') ) # if valid format is present, then choose closes value
