@@ -521,8 +521,7 @@ class YTFS(Operations):
 
         return 0
 
-    @_pathdec
-    def unlink(self, tid):
+    def unlink(*args):
 
         """
         File removal. In fact nothing is deleted, but for correct ``rm -r`` handling we deceive shell, that function
@@ -614,15 +613,11 @@ class YTFS(Operations):
         """
 
         try:
-           return self.fds[fh].read(offset, length, fh)
+            return self.fds[fh].read(offset, length, fh)
 
         except AttributeError: # control file
 
-            if tid[1] == " next":
-                d = True
-            elif tid[1] == " prev":
-                d = False
-            else:
+            if tid[1] not in (" next", " prev"):
                 raise FuseOSError(errno.EINVAL)
 
             return self.__sh_script[offset:offset+length]
