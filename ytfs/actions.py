@@ -65,6 +65,9 @@ class YTActions():
         if not isinstance(search_query, str):
             raise ValueError("Expected str for 1st parameter (search_query).")
 
+        if "api_key" in self.preferences:
+            self.api_key = self.preferences["api_key"]
+
         self.avail_files = OrderedDict()
         self.visible_files = None
         self.adj_tokens = {False: None, True: None}

@@ -50,6 +50,11 @@ Example::
     larry@localhost /tmp/youtube-dir $ mv kasztana banana
     larry@localhost /tmp/youtube-dir $ rmdir banana
 
+YouTube Data v3 API Key
+=======================
+
+You can specify your own api key for the YouTube Data v3 API using the ``--youtube-api-key`` option or by setting the ``YTFS_YOUTUBE_API_KEY`` environment variable.
+
 Navigate between search pages
 -----------------------------
 
