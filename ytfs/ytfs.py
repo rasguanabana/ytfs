@@ -717,6 +717,7 @@ def main():
     avgrp.add_argument('-o', choices=['date', 'rating', 'relevance', 'title', 'viewCount'], default='relevance',
                         help='Specify the method that will be used to order resources. Values: `date`, `rating`, `relevance`, `title` and `viewCount`. Default is relevance.')
     parser.add_argument('--allow-other', action='store_true', default=False, help="Allow other users to access the filesystem. For this to work, you'll need to set 'user_allow_other' in /etc/fuse.conf. You will need this setting if you want to share YTFS over network (SMB, NFS, etc).")
+    parser.add_argument('--youtube-api-key', type=str, help="Specify the YouTube Data API v3 key to use. By default a library key will be used.")
 
     x = parser.parse_args()
 
@@ -738,6 +739,11 @@ def main():
     if x.m:
         for m in x.m.split(','):
             YTActions.preferences['metadata'][m] = True
+
+    if x.youtube_api_key:
+        YTActions.preferences['api_key'] = x.youtube_api_key
+    elif "YTFS_YOUTUBE_API_KEY" in os.environ:
+        YTActions.preferences['api_key'] = os.environ["YTFS_YOUTUBE_API_KEY"]
 
     YTActions.preferences['order'] = x.o
 
